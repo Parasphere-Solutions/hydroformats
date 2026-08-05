@@ -1,0 +1,54 @@
+[project]
+name = "hydroformats"
+version = "0.1.0"
+description = "Pure-Python parsers for hydrographic survey log formats (HYPACK® RAW, HYSWEEP® HSX)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Parasphere Solutions", email = "zachary@paraspheresolutions.com" }]
+keywords = ["hydrography", "hypack", "hsx", "multibeam", "bathymetry", "survey", "sonar"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Hydrology",
+]
+
+[project.urls]
+Homepage = "https://github.com/Parasphere-Solutions/hydroformats"
+Issues = "https://github.com/Parasphere-Solutions/hydroformats/issues"
+
+[project.scripts]
+hydroformats = "hydroformats.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hydroformats"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.coverage.run]
+source = ["hydroformats"]
+
+[tool.coverage.report]
+show_missing = true

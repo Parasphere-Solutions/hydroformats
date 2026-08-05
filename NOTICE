@@ -1,0 +1,10 @@
+hydroformats
+Copyright 2026 Parasphere Solutions LLC
+
+HYPACK(R) and HYSWEEP(R) are registered trademarks of Xylem Inc. or its
+subsidiaries. This project is an independent interoperability effort and is
+not affiliated with, endorsed by, or sponsored by Xylem.
+
+Format knowledge in this library is derived exclusively from publicly
+available documentation and open-source software; see docs/FORMAT-SOURCES.md
+for the specific source anchoring every record type.
