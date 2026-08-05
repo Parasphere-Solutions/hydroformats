@@ -280,24 +280,32 @@ class TimedRecord(Record):
 
 @dataclass(frozen=True)
 class Position(TimedRecord):
-    """``POS dn t x y`` — grid position (easting, northing).
+    """``POS dn t x y [extras]`` — grid position (easting, northing).
 
-    Anchors: USGS metadata (RAW), MB-System (HSX).
+    Anchors: USGS metadata (RAW), MB-System (HSX). Real RAW files log a
+    fifth numeric value (observed in USGS 2014-009-FA data; semantics
+    unanchored) — trailing fields are preserved verbatim in ``extras``.
     """
 
     x: float
     y: float
+    extras: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class RawPosition(TimedRecord):
     """``RAW dn t n lat lon alt utc`` — raw GNSS position (RAW dialect).
 
-    lat/lon are logged in HYPACK's "ddmmmm.mmmm" packing: multiply by 100
-    to obtain NMEA-style ``ddmm.mmmmm`` (degrees*100 + minutes) — per the
-    USGS 2014-009-FA metadata, which anchors this record. ``altitude`` is
-    ellipsoid height in meters; ``utc`` is GPS time HHMM(SS...) as logged.
-    The raw fields are stored untouched; ``latitude_degrees`` /
+    lat/lon are logged in HYPACK's ``ddmmmm.mmmm`` packing. **Divide by 100**
+    to obtain NMEA-style ``ddmm.mmmmm`` (degrees*100 + minutes). The USGS
+    2014-009-FA metadata prose says "multiply by 100", but the actual data
+    files from that same survey prove division: ``RAW ... 410966.80360
+    -714331.75760 ...`` decodes to 41.1611°N 71.7220°W, which matches the
+    UTM-18N ``POS`` eastings/northings logged in the same second, while
+    multiplication yields impossible coordinates (see
+    docs/FORMAT-SOURCES.md, "anchor errata"). ``altitude`` is ellipsoid
+    height in meters; ``utc`` is GPS time (HHMMSS.sss in real files) kept
+    verbatim. Raw fields are stored untouched; ``latitude_degrees`` /
     ``longitude_degrees`` decode to signed decimal degrees.
     """
 
@@ -309,7 +317,7 @@ class RawPosition(TimedRecord):
 
     @staticmethod
     def _decode(value: float) -> float:
-        nmea = value * 100.0  # -> ddmm.mmmmm (degrees*100 + minutes)
+        nmea = value / 100.0  # ddmmmm.mmmm -> ddmm.mmmmm (degrees*100 + minutes)
         degrees = int(nmea // 100.0)
         minutes = nmea - degrees * 100.0
         return degrees + minutes / 60.0

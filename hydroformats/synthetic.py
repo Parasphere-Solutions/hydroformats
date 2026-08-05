@@ -63,9 +63,9 @@ def write_raw(path: str | Path, survey: SyntheticSurvey = _DEFAULT_SURVEY) -> Pa
         y = s.northing - i * 1.6
         depth = s.depth + 0.15 * math.sin(i)
         lines += [
-            f"POS {s.device_gps} {t:.3f} {x:.3f} {y:.3f}",
-            f"RAW {s.device_gps} {t:.3f} 4 42.3853910 -73.5528410 -32.834 1346{i:02d}",
-            f"QUA {s.device_gps} {t:.3f} 6 8.9 1.1 11 4 0.012 0.014 0.018",
+            f"POS {s.device_gps} {t:.3f} {x:.3f} {y:.3f} 4.338",
+            f"RAW {s.device_gps} {t:.3f} 4 423853.9100 -735528.4100 -32.834 1346{i:02d}.00000",
+            f"QUA {s.device_gps} {t:.3f} 6 8.9 1.1 11.000 4.000 0.012 0.014 0.018",
             f"EC1 {s.device_sounder} {t:.3f} {depth:.2f}",
             f"HCP {s.device_mru} {t:.3f} 0.04 {0.8 * math.sin(i):.2f} {0.5 * math.cos(i):.2f}",
             f"GYR {s.device_mru} {t:.3f} {118.0 + i:.1f}",

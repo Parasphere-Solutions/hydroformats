@@ -61,12 +61,14 @@ def test_fix_three_field_variant_per_usgs():
     assert record == FixMark(tag="FIX", device=99, time=100.5, event=7, x=None, y=None)
 
 
-def test_raw_position_per_usgs_semantics():
-    # Logged "ddmmmm.mmmm": ×100 -> NMEA 4238.53910 = 42° 38.5391' (USGS S2).
-    record = parse_one("RAW 0 49573.971 4 42.3853910 -73.5528410 -32.834 1346")
+def test_raw_position_packed_decode():
+    # Logged "ddmmmm.mmmm": ÷100 -> NMEA 4238.53910 = 42° 38.5391'. The
+    # division (not the metadata prose's "multiply") is proven by real
+    # 2014-009-FA data — see tests/test_real_data.py and the anchor errata.
+    record = parse_one("RAW 0 49573.971 4 423853.9100 -735528.4100 -32.834 1346")
     assert isinstance(record, RawPosition)
     assert record.count == 4 and record.utc == "1346"
-    assert record.latitude_raw == 42.385391  # stored untouched
+    assert record.latitude_raw == 423853.91  # stored untouched
     assert record.latitude_degrees == pytest.approx(42 + 38.5391 / 60, abs=1e-9)
     assert record.longitude_degrees == pytest.approx(-(73 + 55.2841 / 60), abs=1e-9)
 

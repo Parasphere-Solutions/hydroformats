@@ -42,10 +42,12 @@ def _parse_off(fields: tuple[str, ...], line: Line) -> Record:
 
 
 def _parse_qua(fields: tuple[str, ...], line: Line) -> Record:
+    # Real loggers write the integer fields float-formatted ("12.000"),
+    # observed in USGS 2014-009-FA data — parse via float, store as int.
     return Quality(
         tag="QUA", device=_i(fields, 0), time=_f(fields, 1), count=_i(fields, 2),
-        m=_f(fields, 3), hdop=_f(fields, 4), satellites=_i(fields, 5),
-        mode=_i(fields, 6), extras=tuple(float(x) for x in fields[7:]),
+        m=_f(fields, 3), hdop=_f(fields, 4), satellites=int(float(fields[5])),
+        mode=int(float(fields[6])), extras=tuple(float(x) for x in fields[7:]),
     )
 
 

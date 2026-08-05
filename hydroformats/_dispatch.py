@@ -104,7 +104,7 @@ def parse_dev(fields: tuple[str, ...], line: Line) -> Record:
 def parse_pos(fields: tuple[str, ...], line: Line) -> Record:
     return Position(
         tag="POS", device=_i(fields, 0), time=_f(fields, 1),
-        x=_f(fields, 2), y=_f(fields, 3),
+        x=_f(fields, 2), y=_f(fields, 3), extras=fields[4:],
     )
 
 
