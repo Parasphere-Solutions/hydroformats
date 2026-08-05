@@ -23,6 +23,13 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Direct download, verified working with a browser UA (≈42 MB zip of real
+# HYPACK RAW logs from federal survey 2014-009-FA, public domain):
+USGS_DIRECT = (
+    "https://cmgds.marine.usgs.gov/data/field-activity-data/2014-009-FA/"
+    "data/navigation/2014-009-FA_hypack.zip"
+)
+
 USGS_PAGES = [
     # Metadata/catalog pages describing HYPACK navigation data; follow the
     # download links they contain in a browser if automated fetch is blocked.
@@ -56,6 +63,9 @@ def fetch(url: str, destination: Path) -> bool:
 def main() -> int:
     data = Path(__file__).parent.parent / "data"
     data.mkdir(exist_ok=True)
+    print("USGS 2014-009-FA real HYPACK logs (public domain, ~42 MB):")
+    fetch(USGS_DIRECT, data / USGS_DIRECT.rsplit("/", 1)[-1])
+    print()
     print("USGS field-activity pages (HYPACK-logged navigation):")
     for url in USGS_PAGES:
         fetch(url, data / url.rsplit("/", 1)[-1])

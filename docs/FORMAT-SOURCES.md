@@ -30,6 +30,30 @@ MSG, HCP).
 <https://www.eye4software.com/hydromagic/documentation/manual/user-interface-features/import-raw-data/import-hypack/>.
 Consulted 2026-08-05.
 
+**S4 — Real logged data** (public domain): the actual survey files behind
+S2 — `2014-009-FA_hypack.zip` (≈42 MB, HYPACK 14.0.9.47, Julian-day
+directories of `.292` RAW logs)
+<https://cmgds.marine.usgs.gov/data/field-activity-data/2014-009-FA/data/navigation/2014-009-FA_hypack.zip>.
+The library parses these files with **zero malformed and zero unknown data
+records** (7,915 records across two sampled files); short verbatim excerpts
+form the regression suite in `tests/test_real_data.py`. Consulted
+2026-08-05.
+
+## Anchor errata
+
+- **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
+  format ddmmmm.mmmm. To convert to ddmm.mmmmm multiply by 100." The real
+  S4 data proves the conversion is **division** by 100: logged
+  `410966.80360 / -714331.75760` decodes by division to 41.1611°N
+  71.7220°W, consistent with the UTM-18N `POS` easting/northing logged in
+  the same second; multiplication produces impossible coordinates. The
+  library divides.
+- **S1/S2 describe `POS` as four fields**; real S4 files log a fifth
+  numeric value. Semantics unanchored → preserved verbatim in
+  `Position.extras`.
+- **S2 shows QUA's integer fields as integers**; real S4 files log them
+  float-formatted (`12.000`). The parser accepts both.
+
 ## Record-by-record anchoring
 
 | Record | Dialect | Anchor | Note |

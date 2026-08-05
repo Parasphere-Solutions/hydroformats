@@ -25,6 +25,10 @@ library.
   in [docs/FORMAT-SOURCES.md](docs/FORMAT-SOURCES.md). Where no public
   anchor exists, the record parses as `UnknownRecord` on purpose — nothing
   in this library is guessed.
+- **Validated on real survey data.** Parses genuine USGS-logged HYPACK
+  files (federal survey 2014-009-FA) with zero malformed and zero unknown
+  data records; verbatim excerpts from those public-domain files form part
+  of the test suite.
 
 ## 30 seconds
 
@@ -79,13 +83,13 @@ $ hydroformats to-jsonl survey.hsx -o everything.jsonl
 
 | Tag | Meaning | RAW | HSX | Anchor |
 |-----|---------|:---:|:---:|--------|
-| POS | Grid position (easting/northing) | ✅ | ✅ | USGS · MB-System |
+| POS | Grid position (easting/northing, + observed trailing field) | ✅ | ✅ | USGS · MB-System · real data |
 | RAW | Raw GNSS lat/lon/alt | ✅ | — | USGS |
 | EC1 | Echosounder depth | ✅ | ✅ | USGS · MB-System |
 | GYR | Heading | ✅ | ✅ | USGS · MB-System |
 | HCP | Heave/roll/pitch | ✅ | ✅ | USGS · MB-System |
 | TID | Tide correction | ✅ | ✅ | USGS · MB-System |
-| QUA | GNSS quality (+GST extras) | ✅ | — | USGS |
+| QUA | GNSS quality (+GST extras; float-formatted ints tolerated) | ✅ | — | USGS · real data |
 | KTC | RTK water level | ✅ | — | USGS |
 | MSG | Device message (NMEA…) | ✅ | ✅ | USGS |
 | FIX | Event mark (3- and 5-field) | ✅ | ✅ | USGS · example file |
@@ -131,9 +135,15 @@ Things the formats don't tell you loudly:
 - **Positions are projected grid coordinates.** The file names its
   ellipsoid/projection (`ELL`/`PRO`, or MB-System's `PRJ` extension) but
   carries no EPSG code. Know your project's CRS before trusting eastings.
-- **`RAW` lat/lon are packed** as `ddmmmm.mmmm` (divide by 100 to get
-  NMEA-style `ddmm.mmmmm`); the record class exposes decoded
-  `latitude_degrees`/`longitude_degrees`.
+- **`RAW` lat/lon are packed** as `ddmmmm.mmmm` — divide by 100 to get
+  NMEA-style `ddmm.mmmmm`. (One widely-indexed federal metadata page says
+  "multiply"; the actual data files from that same survey prove division —
+  a real line `RAW 1 39052.101 4 410966.80360 -714331.75760 …` decodes to
+  41.1611°N, 71.7220°W, matching its companion UTM `POS` record. See the
+  anchor errata in FORMAT-SOURCES.) The record class exposes decoded
+  `latitude_degrees`/`longitude_degrees`; hemisphere sign follows the
+  logged value's sign (all public examples we hold are N/W — treat S/E
+  data as unverified and check yours).
 - **HCP sign conventions:** roll positive = port up; pitch positive = bow
   up (per USGS metadata; MB-System negates roll into its own convention,
   which confirms the logged order).
@@ -146,7 +156,7 @@ Things the formats don't tell you loudly:
 
 ```console
 $ uv sync --extra dev
-$ uv run pytest              # 60 tests
+$ uv run pytest              # 59 tests, 98% coverage
 $ uv run ruff check .
 ```
 
