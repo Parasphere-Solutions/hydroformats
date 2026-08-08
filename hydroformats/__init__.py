@@ -4,6 +4,7 @@ Supported dialects:
 
 - HYPACK® RAW (single-beam survey logging): :func:`parse_raw`
 - HYSWEEP® HSX (multibeam text logging): :func:`parse_hsx`
+- HYSWEEP® HS2X (multibeam binary edit format): :func:`parse_hs2x`
 
 Most callers want :func:`open_session`, which sniffs the dialect, resolves
 the device registry from the header, and streams typed records::
@@ -14,15 +15,17 @@ the device registry from the header, and streams typed records::
     for record in session.records():
         ...
 
-Every record class documents the public source anchoring its field layout;
-see ``docs/FORMAT-SOURCES.md``. Unanchored record types parse as
-:class:`~hydroformats.records.UnknownRecord` — nothing is guessed.
+Every record class documents the source anchoring its field layout; see
+``docs/FORMAT-SOURCES.md``. Unanchored record types parse as
+:class:`~hydroformats.records.UnknownRecord` (text) or
+:class:`~hydroformats.records.Hs2xOpaque` (binary) — nothing is guessed.
 """
 from . import records
+from .hs2x import parse_hs2x
 from .hsx import parse_hsx
 from .raw import parse_raw
 from .session import Header, Session, open_session, sniff_dialect
-from .synthetic import SyntheticSurvey, write_hsx, write_raw
+from .synthetic import SyntheticSurvey, write_hs2x, write_hsx, write_raw
 
 __version__ = "0.1.0"
 
@@ -31,10 +34,12 @@ __all__ = [
     "Session",
     "SyntheticSurvey",
     "open_session",
+    "parse_hs2x",
     "parse_hsx",
     "parse_raw",
     "records",
     "sniff_dialect",
+    "write_hs2x",
     "write_hsx",
     "write_raw",
     "__version__",

@@ -13,6 +13,7 @@ parse surface as :class:`MalformedRecord` with the error preserved.
 """
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass, field
 
 
@@ -547,3 +548,323 @@ class RawSidescan(TimedRecord):
     frequency: int
     port: tuple[int, ...] = field(default=())
     starboard: tuple[int, ...] = field(default=())
+
+
+# --------------------------------------------------------------------------
+# HS2X binary records (HYSWEEP 64-bit edit format)
+#
+# There is no public byte-level HS2X specification (HYPACK's stated policy;
+# see docs/FORMAT-SOURCES.md, source S5). Field layouts below are anchored
+# empirically: every named field was cross-validated against the paired HSX
+# text log of the same logging session. Words whose meaning that validation
+# could not pin are carried verbatim in ``unassigned`` tuples, in payload
+# order, with their offsets documented — nothing is guessed.
+#
+# Integer conventions proven by S5: times are milliseconds past midnight;
+# grid coordinates and elevations are metric centimetres (divide by
+# 30.4800609601 for US-survey-foot grids — dividing by 30.48 leaves a 2 ppm
+# scale error that grows to tens of feet at State Plane magnitudes); angles
+# are millidegrees except beam angles, which are centidegrees.
+# --------------------------------------------------------------------------
+
+
+def _packed_to_degrees(value: float) -> float:
+    """HYPACK ``ddmmmm.mmmm`` packing to signed decimal degrees (see
+    :class:`RawPosition` for the division-not-multiplication errata)."""
+    sign = -1.0 if value < 0 else 1.0
+    nmea = abs(value) / 100.0
+    degrees = int(nmea // 100.0)
+    minutes = nmea - degrees * 100.0
+    return sign * (degrees + minutes / 60.0)
+
+
+@dataclass(frozen=True)
+class Hs2xFileHeader(Record):
+    """Bootstrap record (type 26): format magic, version, build date.
+
+    Payload: NUL-separated strings (``DATAGRAM VERSION <n>``, a build date
+    such as ``03-FEB-2022``) then one 32-bit word (``unassigned``). The
+    build date identifies the writing software build, not the survey date.
+    """
+
+    text: str
+    build_date: str
+    version: int | None
+    unassigned: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Hs2xOpaque(Record):
+    """Any HS2X record type without an anchored layout — payload verbatim.
+
+    Covers the configuration block (types 50–55: device/geodesy/text blobs,
+    observed but not decoded) and any type this library has no decoder
+    for. Tag is ``T<type>``.
+    """
+
+    record_type: int
+    payload: bytes
+
+
+@dataclass(frozen=True)
+class Hs2xTimed(Record):
+    """Base for HS2X records led by a time tag (ms past midnight)."""
+
+    time_ms: int
+
+    @property
+    def time(self) -> float:
+        """Seconds past midnight (matches HSX/RAW time tags)."""
+        return self.time_ms / 1000.0
+
+
+@dataclass(frozen=True)
+class Hs2xTimeMark(Hs2xTimed):
+    """Type 61 — line time marker (one at data start, one at end).
+
+    Anchor S5: the two payload words after the time were zero in the
+    validation capture (``unassigned``).
+    """
+
+    unassigned: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Hs2xHeading(Hs2xTimed):
+    """Type 62 — gyro heading.
+
+    Payload: time_ms(i32), device(u16), u16, heading(i32, millidegrees).
+    Anchor S5: per-device record counts equal the paired HSX ``GYR`` census
+    exactly, and headings match HSX values at the same timestamps.
+    """
+
+    device: int
+    heading_millideg: int
+    unassigned: tuple[int, ...]
+
+    @property
+    def heading_degrees(self) -> float:
+        return self.heading_millideg / 1000.0
+
+
+@dataclass(frozen=True)
+class Hs2xAttitude(Hs2xTimed):
+    """Type 63 — motion sensor (roll/pitch; heave not yet located).
+
+    Payload: time_ms(i32), device(u16), u16, i32, i32, roll(i32, mdeg),
+    i32, pitch(i32, mdeg), i32. Anchor S5: roll and pitch equal the paired
+    HSX ``HCP`` values to the millidegree at matching timestamps. The
+    remaining words were zero in validation (heave was 0.00 throughout that
+    session, so the heave word cannot be identified yet) — ``unassigned``.
+    """
+
+    device: int
+    roll_millideg: int
+    pitch_millideg: int
+    unassigned: tuple[int, ...]
+
+    @property
+    def roll_degrees(self) -> float:
+        return self.roll_millideg / 1000.0
+
+    @property
+    def pitch_degrees(self) -> float:
+        return self.pitch_millideg / 1000.0
+
+
+@dataclass(frozen=True)
+class Hs2xPosition(Hs2xTimed):
+    """Type 67 — navigation fix: grid position plus raw geographic inputs.
+
+    Payload: time_ms(i32), i32, easting(i32 cm), northing(i32 cm), a
+    duplicate easting/northing pair, i32, i32, four u16, then four doubles:
+    latitude and longitude in HYPACK ``ddmmmm.mmmm`` packing, ellipsoidal
+    height (metres), and UTC seconds past midnight. Anchor S5: grid pair
+    tracks the paired HSX ``POS`` series (constant sub-foot antenna offset,
+    0.01 ft scatter) once the survey-foot factor is applied; the packed
+    lat/lon decode to the survey site; ``utc_seconds`` equals the local
+    time tag plus the session's UTC offset exactly. The duplicate grid pair
+    was byte-identical to the first in validation — ``unassigned``.
+    """
+
+    easting_cm: int
+    northing_cm: int
+    latitude_packed: float
+    longitude_packed: float
+    ellipsoid_height: float
+    utc_seconds: float
+    unassigned: tuple[int, ...]
+
+    @property
+    def latitude_degrees(self) -> float:
+        return _packed_to_degrees(self.latitude_packed)
+
+    @property
+    def longitude_degrees(self) -> float:
+        return _packed_to_degrees(self.longitude_packed)
+
+
+@dataclass(frozen=True)
+class Hs2xTide(Hs2xTimed):
+    """Type 60 — tide correction.
+
+    Payload: time_ms(i32), device(u16), u16, i32, i32, tide(u16,
+    centimetres), u16. Anchor S5: ``tide_cm`` equals the paired HSX ``TID``
+    value converted at the survey-foot factor, record for record.
+    """
+
+    device: int
+    tide_cm: int
+    unassigned: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Hs2xPing(Hs2xTimed):
+    """Type 68 — one multibeam ping header; its beams follow as type-69
+    records (``beam_count`` of them, in swath order).
+
+    Named fields and anchors (S5, against the paired HSX log): ``time_ms``
+    and ``ping_number`` equal the HSX ``RMB`` time and ping fields for all
+    pings; ``device`` and ``sonar_type`` equal the RMB device and
+    sonar-type fields; ``sound_velocity_cm_s`` is the RMB sound velocity
+    ×100; ``easting_cm``/``northing_cm`` track the HSX ``POS`` series with
+    a constant sub-foot lever arm; ``heading_millideg``,
+    ``roll_millideg``, ``pitch_millideg`` equal the navigation gyro and
+    ``HCP`` values at the ping time to the millidegree.
+
+    ``unassigned`` carries, in order: u32 at +4 (sub-second-scale counter),
+    u16 at +14, i32 at +32, i32 at +40, i32 at +44 (millimetre-scale,
+    near-constant in validation; heave candidate), i32 at +56 (constant
+    134), i32 at +60 (a second heading-like series matching neither gyro
+    exactly), u16 at +64, u16 at +66. ``tail`` is payload bytes 68–143
+    verbatim (zeros plus a constant 10-byte marker at +96 in validation).
+    """
+
+    device: int
+    sonar_type: int
+    beam_count: int
+    sound_velocity_cm_s: int
+    ping_number: int
+    easting_cm: int
+    northing_cm: int
+    heading_millideg: int
+    roll_millideg: int
+    pitch_millideg: int
+    unassigned: tuple[int, ...]
+    tail: bytes
+
+
+# Indices into Hs2xSounding.unassigned used by the no-detect signature.
+_SND_LINEAR = 2
+_SND_LOG = 4
+_SND_QUALITY = 8
+
+
+@dataclass(frozen=True)
+class Hs2xSounding(Record):
+    """Type 69 — one beam-solved sounding (52-byte payload).
+
+    Anchored fields (S5): ``easting_cm``/``northing_cm``/``elevation_cm``
+    are the solved grid position and elevation in metric centimetres
+    (validated against the paired HSX ``POS``/``EC1``/``TID`` series and
+    the transducer offset chain; elevation is negative below datum).
+    ``beam_angle_cdeg`` is the beam angle in centidegrees, sweeping
+    monotonically across the swath with port negative in validation.
+
+    ``unassigned`` carries the remaining words in payload order:
+
+    ======  ======  =====================================================
+    index   offset  observed behaviour in the validation capture
+    ======  ======  =====================================================
+    0       +16     i32, always 0
+    1       +20     i32, millimetre-scale, monotone with beam angle
+                    (across-track-like, but not the E/N offset; scale
+                    varies with depth — an intermediate solver quantity)
+    2       +24     i32, linear scalar; 0 on no-detect beams; grows with
+                    range (TVU/THU candidate per the HYPACK manuals)
+    3       +28     i16, always 0
+    4       +30     i16, 78-step geometric ladder (ratio 1.0593 ≈ 0.5 dB);
+                    1 on no-detect beams (TVU/THU candidate)
+    5       +32     i32, high half a small counter (0–5)
+    6       +36     i32, always 0
+    7       +40     i16, millimetre-scale, along-track-like (see index 1)
+    8       +42     i16, quality-like; exactly 1 on no-detect beams
+    9       +44     i32, always 0
+    10      +48     i32, always 0
+    ======  ======  =====================================================
+
+    No-detect beams (unfilled swath slots) park at the transducer position
+    with the signature tested by :attr:`is_no_detect`; they are storage
+    artefacts, not soundings.
+    """
+
+    easting_cm: int
+    northing_cm: int
+    elevation_cm: int
+    beam_angle_cdeg: int
+    unassigned: tuple[int, ...]
+
+    @property
+    def easting_m(self) -> float:
+        return self.easting_cm / 100.0
+
+    @property
+    def northing_m(self) -> float:
+        return self.northing_cm / 100.0
+
+    @property
+    def elevation_m(self) -> float:
+        return self.elevation_cm / 100.0
+
+    @property
+    def beam_angle_degrees(self) -> float:
+        return self.beam_angle_cdeg / 100.0
+
+    @property
+    def is_no_detect(self) -> bool:
+        """True for unfilled beam slots (zero return, sentinel words).
+
+        Signature validated on every no-detect record in the S5 capture:
+        the linear scalar is 0 and both the ladder and quality words are 1.
+        """
+        return (
+            self.unassigned[_SND_LINEAR] == 0
+            and self.unassigned[_SND_LOG] == 1
+            and self.unassigned[_SND_QUALITY] == 1
+        )
+
+
+@dataclass(frozen=True)
+class Hs2xSidescanHeader(Hs2xTimed):
+    """Type 70 — sidescan ping header; the sample block follows as type 72.
+
+    Payload: time_ms(i32), device(u16), port samples(u16), starboard
+    samples(u16), u16, sound velocity(i32, cm/s), ping number(i32), four
+    i32, easting(i32 cm), northing(i32 cm), heading(i32 mdeg). Anchor S5:
+    sample counts × 4 bytes equal the following type-72 payload size;
+    sound velocity and ping number continue the type-68 series; the grid
+    pair and heading sit on the navigation track.
+    """
+
+    device: int
+    port_samples: int
+    starboard_samples: int
+    sound_velocity_cm_s: int
+    ping_number: int
+    easting_cm: int
+    northing_cm: int
+    heading_millideg: int
+    unassigned: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Hs2xSidescanData(Record):
+    """Type 72 — sidescan samples: little-endian u32 amplitudes, port
+    samples first then starboard (counts from the preceding type-70
+    header). Kept as raw bytes; :meth:`values` decodes on demand."""
+
+    samples: bytes
+
+    def values(self) -> tuple[int, ...]:
+        count = len(self.samples) // 4
+        return struct.unpack(f"<{count}I", self.samples[: count * 4])

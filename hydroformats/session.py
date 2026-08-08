@@ -1,7 +1,8 @@
 """Session layer: a parsed survey file with header context resolved.
 
-A Session sniffs the dialect (an ``HSX`` version record marks HSX), splits
-header from data at ``EOH``, and resolves the device registry so data
+A Session sniffs the dialect (the binary ``DATAGRAM VERSION`` magic marks
+HS2X; an ``HSX`` version record marks HSX), splits header from data at
+``EOH`` (synthesized for HS2X), and resolves the device registry so data
 records can be attributed to named sensors. Data access is streaming-first
 (:meth:`Session.records`); :meth:`Session.load` materializes everything for
 small files and tests.
@@ -13,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .framing import iter_lines
+from .hs2x import MAGIC as _HS2X_MAGIC
+from .hs2x import parse_hs2x
 from .hsx import parse_hsx
 from .raw import parse_raw
 from .records import (
@@ -27,8 +30,19 @@ from .records import (
 _SNIFF_LINES = 100
 
 
+def _has_hs2x_magic(path: str | Path) -> bool:
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(4 + len(_HS2X_MAGIC))
+    except OSError:
+        return False
+    return head[4:] == _HS2X_MAGIC
+
+
 def sniff_dialect(path: str | Path) -> str:
-    """Return ``"hsx"`` or ``"raw"`` by inspecting the header region."""
+    """Return ``"hs2x"``, ``"hsx"``, or ``"raw"`` by inspecting the file."""
+    if _has_hs2x_magic(path):
+        return "hs2x"
     for line in iter_lines(path):
         if line.number > _SNIFF_LINES or line.tag == "EOH":
             break
@@ -37,6 +51,8 @@ def sniff_dialect(path: str | Path) -> str:
     suffix = Path(path).suffix.lower()
     if suffix == ".hsx":
         return "hsx"
+    if suffix == ".hs2x":
+        return "hs2x"
     return "raw"
 
 
@@ -62,7 +78,8 @@ class Session:
     def __init__(self, path: str | Path, dialect: str | None = None):
         self.path = Path(path)
         self.dialect = dialect or sniff_dialect(self.path)
-        self._parser = parse_hsx if self.dialect == "hsx" else parse_raw
+        parsers = {"hsx": parse_hsx, "hs2x": parse_hs2x}
+        self._parser = parsers.get(self.dialect, parse_raw)
         self.header = self._read_header()
 
     def _read_header(self) -> Header:

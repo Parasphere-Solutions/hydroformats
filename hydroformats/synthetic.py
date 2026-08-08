@@ -1,9 +1,9 @@
 """Synthetic survey file writers.
 
-These generate structurally-faithful RAW and HSX files for testing parsers
-and downstream pipelines without real survey data (which is rarely shareable).
-They are a supported feature, not just a test fixture: point your ingest at
-a synthetic file before you point it at a customer's.
+These generate structurally-faithful RAW, HSX, and HS2X files for testing
+parsers and downstream pipelines without real survey data (which is rarely
+shareable). They are a supported feature, not just a test fixture: point
+your ingest at a synthetic file before you point it at a customer's.
 
 Field layouts mirror the anchored specifications in docs/FORMAT-SOURCES.md;
 values are plausible but fictional (a small survey pattern near a pier).
@@ -11,6 +11,7 @@ values are plausible but fictional (a small survey pattern near a pier).
 from __future__ import annotations
 
 import math
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -148,4 +149,128 @@ def write_hsx(
             quality,
         ]
     path.write_text("\r\n".join(lines) + "\r\n", encoding="ascii")
+    return path
+
+
+# --------------------------------------------------------------------------
+# HS2X (binary) writer
+# --------------------------------------------------------------------------
+
+_HS2X_VERSION_PAYLOAD = (
+    b"DATAGRAM VERSION 112" + b"\x00" * 4 + b"03-FEB-2022" + b"\x00" * 5
+    + struct.pack("<I", 2)
+)
+
+_HS2X_PING_MARKER = b"\x01\x03\x00\x00\x00\x01\x01\x00\x00\x00"
+
+
+def _hs2x_sounding(easting_cm: int, northing_cm: int, elevation_cm: int,
+                   beam_angle_cdeg: int, unassigned: tuple[int, ...]) -> bytes:
+    u = unassigned
+    return struct.pack(
+        "<7i2h2i2h2i",
+        easting_cm, northing_cm, elevation_cm, beam_angle_cdeg,
+        u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], u[8], u[9], u[10],
+    )
+
+
+def _hs2x_ping(time_ms: int, device: int, beam_count: int, ping_number: int,
+               easting_cm: int, northing_cm: int, heading_millideg: int,
+               roll_millideg: int, pitch_millideg: int) -> bytes:
+    head = struct.pack(
+        "<iI4H2i2i2i2i2i2i2H",
+        time_ms, 0xCA5C0000 | (time_ms & 0xFFFF),
+        device, 516, beam_count, 0,
+        150_000, ping_number,
+        easting_cm, northing_cm,
+        0, heading_millideg,
+        0, -17,
+        roll_millideg, pitch_millideg,
+        134, heading_millideg + 150,
+        205, 2304,
+    )
+    tail = b"\x00" * 28 + _HS2X_PING_MARKER + b"\x00" * 38
+    return head + tail
+
+
+def write_hs2x(
+    path: str | Path,
+    survey: SyntheticSurvey = _DEFAULT_SURVEY,
+    beams: int = 8,
+    pings: int = 2,
+    with_sidescan: bool = True,
+) -> Path:
+    """Write a synthetic HS2X file (binary multibeam edit-format dialect).
+
+    Structure per docs/FORMAT-SOURCES.md source S5: the type-26 bootstrap
+    frame, one opaque configuration frame, a time marker, then per ping a
+    GYR/HCP/POS/TID navigation group, the type-68 ping header, ``beams``
+    type-69 soundings (the first an unfilled no-detect slot), optionally a
+    type-70/72 sidescan pair, and a closing time marker plus the customary
+    trailing size echo. All prev-size links are kept consistent.
+    """
+    path = Path(path)
+    s = survey
+    t0 = int(s.start_seconds * 1000)
+    easting_cm = round(s.easting * 100)
+    northing_cm = round(s.northing * 100)
+    frames: list[tuple[int, bytes]] = [
+        (50, b"\x00" * 32),
+        (61, struct.pack("<3i", t0, 0, 0)),
+    ]
+    for ping in range(pings):
+        t = t0 + 69 * ping
+        e = easting_cm + 240 * ping
+        n = northing_cm - 160 * ping
+        heading = 118_000 + 250 * ping
+        frames += [
+            (62, struct.pack("<i2Hi", t, s.device_mru, 0, heading)),
+            (63, struct.pack("<i2H6i", t, s.device_mru, 4, 0, 0, 400, 0, -200, 0)),
+            (67, struct.pack(
+                "<2i4i2i4H4d",
+                t, 0, e, n, e, n, 134, heading,
+                210, 18, 9, 256,
+                423_853.9100, -735_528.4100, -32.834, s.start_seconds + 14_400.0,
+            )),
+            (60, struct.pack("<i2H2i2H", t, s.device_gps, 0, -17, -18, 78, 9)),
+            (68, _hs2x_ping(t, s.device_sounder, beams, 1000 + ping, e, n,
+                            heading, 400, -200)),
+        ]
+        for beam in range(beams):
+            if beam == 0:  # unfilled swath slot parked at the transducer
+                frames.append((69, _hs2x_sounding(
+                    e, n, -90, 138, (0, -7165, 0, 0, 1, 0, 0, 41, 1, 0, 0),
+                )))
+                continue
+            angle = -4500 + (9000 * beam) // max(beams - 1, 1)
+            depth_cm = -round((s.depth + 0.2 * math.sin(beam + ping)) * 100)
+            frames.append((69, _hs2x_sounding(
+                e + 130 * (beam - beams // 2),
+                n + 90 * (beam - beams // 2),
+                depth_cm, angle,
+                (0, -700 * (beam - beams // 2), 2000 + 13 * beam, 0,
+                 917, 65_536, 0, 27 * beam, -12_800, 0, 0),
+            )))
+        if with_sidescan:
+            port = [40 + (i * 7 + ping) % 50 for i in range(beams)]
+            starboard = [38 + (i * 5 + ping) % 50 for i in range(beams)]
+            frames += [
+                (70, struct.pack(
+                    "<i4H9i",
+                    t, s.device_sounder, beams, beams, 0,
+                    150_000, 1000 + ping, 0, 61_447, 0x7FFFFFFF, 0x01000000,
+                    e, n, heading,
+                )),
+                (72, struct.pack(f"<{2 * beams}I", *port, *starboard)),
+            ]
+    frames.append((61, struct.pack("<3i", t0 + 69 * pings, 0, 0)))
+
+    parts = [struct.pack("<HH", len(_HS2X_VERSION_PAYLOAD), 26), _HS2X_VERSION_PAYLOAD]
+    prev = len(_HS2X_VERSION_PAYLOAD)
+    for record_type, payload in frames:
+        parts.append(struct.pack("<3H", prev, len(payload), record_type))
+        parts.append(payload)
+        prev = len(payload)
+    parts.append(struct.pack("<H", prev))
+    path.write_bytes(b"".join(parts))
     return path

@@ -31,6 +31,8 @@ def _record_dict(record) -> dict:
 def _json_default(value):
     if isinstance(value, tuple):
         return list(value)
+    if isinstance(value, (bytes, bytearray)):
+        return value.hex()
     return str(value)
 
 
