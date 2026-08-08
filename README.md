@@ -1,17 +1,19 @@
 # hydroformats
 
-**Pure-Python parsers for hydrographic survey logs: HYPACK® RAW and HYSWEEP® HSX.**
+**Pure-Python parsers for hydrographic survey logs: HYPACK® RAW, HYSWEEP®
+HSX, and the HS2X binary edit format.**
 
 [![CI](https://github.com/Parasphere-Solutions/hydroformats/actions/workflows/ci.yml/badge.svg)](https://github.com/Parasphere-Solutions/hydroformats/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
 
-Hydrographic survey loggers write plain ASCII that outlives every software
-package that made it: decades of `.RAW` and `.HSX` files sit in agency and
-contractor archives. The formats are documented across scattered manuals,
-federal metadata pages, and one venerable C codebase, but there has been no
-small, typed, dependency-free way to read them from Python. This is that
-library.
+Hydrographic survey loggers write files that outlive every software
+package that made them: decades of `.RAW`, `.HSX`, and `.HS2X` files sit
+in agency and contractor archives. The text formats are documented across
+scattered manuals, federal metadata pages, and one venerable C codebase;
+the binary edit format is documented nowhere at all. There has been no
+small, typed, dependency-free way to read any of them from Python. This is
+that library.
 
 - **Zero dependencies.** Standard library only. `pip install hydroformats`
   and go.
@@ -21,14 +23,17 @@ library.
 - **Never crashes on a bad line.** Real files contain truncated pings and
   odd trailers; you get `MalformedRecord`/`UnknownRecord` values, not
   exceptions.
-- **Source-anchored.** Every field layout traces to a public source, cited
-  in [docs/FORMAT-SOURCES.md](docs/FORMAT-SOURCES.md). Where no public
-  anchor exists, the record parses as `UnknownRecord` on purpose — nothing
-  in this library is guessed.
+- **Source-anchored.** Every field layout traces to a cited source in
+  [docs/FORMAT-SOURCES.md](docs/FORMAT-SOURCES.md) — public documents for
+  the text dialects, a documented empirical cross-validation for the
+  binary HS2X (no public spec exists). Unanchored records parse as
+  `UnknownRecord`/`Hs2xOpaque`, unanchored fields ride along verbatim as
+  `unassigned` — nothing in this library is guessed.
 - **Validated on real survey data.** Parses genuine USGS-logged HYPACK
   files (federal survey 2014-009-FA) with zero malformed and zero unknown
   data records; verbatim excerpts from those public-domain files form part
-  of the test suite.
+  of the test suite. The HS2X decoder is validated field-by-field against
+  a paired HSX log of the same session (see FORMAT-SOURCES, S5).
 
 ## 30 seconds
 
@@ -53,6 +58,18 @@ from hydroformats.records import RawMultibeam
 for record in open_session("survey.HSX").records():
     if isinstance(record, RawMultibeam):
         print(record.ping, record.num_beams, record.depths[:4])
+```
+
+Binary HS2X files stream beam-solved soundings (grid position + elevation
+per beam, metric centimetres), with unfilled swath slots flagged:
+
+```python
+from hydroformats import open_session
+from hydroformats.records import Hs2xSounding
+
+for record in open_session("survey.HS2x").records():
+    if isinstance(record, Hs2xSounding) and not record.is_no_detect:
+        print(record.easting_m, record.northing_m, record.elevation_m)
 ```
 
 ## Command line
@@ -104,9 +121,21 @@ $ hydroformats to-jsonl survey.hsx -o everything.jsonl
 | ELL/PRO/DTM/GEO/HVU/LTP | RAW geodesy header (verbatim fields) | ✅ | — | example file |
 | EC2 | Dual-frequency depth | ⚠ `UnknownRecord` | — | attested, layout unanchored |
 
-Everything else parses as `UnknownRecord` with fields preserved. If you have
-documentation for a record we don't cover, please open an issue with a
-source we can cite.
+**HS2X** (binary, `.HS2x`) is a separate dialect with numeric record
+types rather than tags:
+
+| Type | Meaning | Decoded | Anchor |
+|------|---------|:-------:|--------|
+| 26 | File header (`DATAGRAM VERSION …`) | ✅ | S5 |
+| 68 | Ping header: time, ping number, device, SV, grid position, heading/roll/pitch | ✅ | S5 (equal to the paired HSX RMB/GYR/HCP series) |
+| 69 | Beam-solved sounding: grid cm, elevation cm, beam angle; no-detect sentinel | ✅ | S5 (EC1/TID/POS agreement) |
+| 60/61/62/63/67 | Tide, time marks, gyro, attitude, position (+ packed lat/lon, UTC) | ✅ | S5 |
+| 70/72 | Sidescan header + u32 samples | ✅ | S5 |
+| 50–55 | Configuration block | ⚠ `Hs2xOpaque` | payloads undecoded |
+
+Everything else parses as `UnknownRecord`/`Hs2xOpaque` with content
+preserved. If you have documentation for a record we don't cover, please
+open an issue with a source we can cite.
 
 ## Testing your pipeline without real data
 
@@ -114,10 +143,11 @@ Real survey data is rarely shareable. The synthetic writers produce
 structurally-faithful files for exercising downstream code:
 
 ```python
-from hydroformats import write_raw, write_hsx, SyntheticSurvey
+from hydroformats import write_raw, write_hsx, write_hs2x, SyntheticSurvey
 
 write_raw("test.raw", SyntheticSurvey(fixes=100))
 write_hsx("test.hsx", beams=64, pings=50)
+write_hs2x("test.HS2x", beams=64, pings=50)
 ```
 
 Public real-world data to graduate to: USGS field-activity archives log
@@ -151,12 +181,24 @@ Things the formats don't tell you loudly:
   bitmask declares which per-beam arrays follow, one line each in ascending
   bitmask order — except sounding-XY (0x0004), which contributes two lines
   (eastings, then northings).
+- **HS2X integers are metric centimetres** (grid coordinates, elevations)
+  and milli/centidegrees (angles), regardless of the survey's grid units.
+  On a US-survey-foot grid divide by **30.4800609601**, not 30.48 — the
+  2 ppm international-foot shortcut moves State Plane coordinates by tens
+  of feet. Elevations are negative below datum. Unfilled swath slots are
+  stored as soundings parked at the transducer position with zero return
+  (`is_no_detect`) — filter them before gridding; on the session we
+  validated against they were 49% of all type-69 records.
+- **An HS2X file is not necessarily edited data.** HYPACK's editor writes
+  HS2X from the moment raw data is loaded ("auto save HSX to HS2X");
+  deletion flags exist in the format per HYPACK's manuals but are not yet
+  located by this library (our validation capture predates any editing).
 
 ## Development
 
 ```console
 $ uv sync --extra dev
-$ uv run pytest              # 59 tests, 98% coverage
+$ uv run pytest              # 79 tests, 98% coverage
 $ uv run ruff check .
 ```
 

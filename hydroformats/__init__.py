@@ -27,7 +27,7 @@ from .raw import parse_raw
 from .session import Header, Session, open_session, sniff_dialect
 from .synthetic import SyntheticSurvey, write_hs2x, write_hsx, write_raw
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Header",

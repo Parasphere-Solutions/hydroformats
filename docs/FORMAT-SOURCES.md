@@ -1,8 +1,12 @@
 # Format sources
 
-Every record layout in this library is anchored to a public source listed
-here. The project rule: **no anchor, no parser** — unanchored record types
-surface as `UnknownRecord`.
+Every record layout in this library is anchored to a source listed here.
+The project rule: **no anchor, no parser** — unanchored record types
+surface as `UnknownRecord` (text dialects) or `Hs2xOpaque` (binary), and
+unanchored fields inside decoded records are carried verbatim in
+`unassigned` tuples. Anchors are public documents wherever they exist; for
+HS2X, where none does, the anchor is a reproducible empirical validation
+(S5) and every unproven field is labelled as such.
 
 ## Sources
 
@@ -39,6 +43,73 @@ records** (7,915 records across two sampled files); short verbatim excerpts
 form the regression suite in `tests/test_real_data.py`. Consulted
 2026-08-05.
 
+**S5 — HS2X empirical cross-validation.** HYPACK publishes no byte-level
+HS2X specification — their stated policy is that HS2 internals are
+"complicated" and integrators should use the reader DLL shipped with
+HYPACK ("HS2 Reader DLL", *Sounding Better!*, October 2009,
+<https://www.xylem.com/siteassets/brand/hypack/resources/newsletter/2009/10-october/hs2readerdll.pdf>),
+and no open-source reader exists in MB-System (HSX only, format 201) or
+anywhere else we could find. The HS2X layouts in this library were
+therefore derived by structural analysis of an HS2X file and anchored by
+cross-validating every named field against the **paired HSX text log of
+the same logging session** (HYPACK 22.1.5.0, format version string
+`DATAGRAM VERSION 112`, a 400-beam interferometric multibeam, 616 pings):
+
+- The file is a single doubly-linked TLV chain
+  (`[prev size:u16][size:u16][type:u16][payload]`, bootstrapped by a
+  4-byte `[size][type=26]` header). The walk covers the file end-to-end
+  with **zero broken prev-links** across ~500,000 frames, and the record
+  census matches the paired HSX census type for type (tide 408, gyro
+  2,533 across three devices, attitude 2,125, position 408, pings 616,
+  soundings 616×800).
+- Ping (type 68) time and ping number equal the HSX `RMB` time tag and
+  ping number **616/616 exactly**; device and sonar-type words equal the
+  RMB device/sonar-type fields; the sound-velocity word is the RMB value
+  ×100 (cm/s).
+- Ping heading equals the navigation gyro's `GYR` series to ≤0.001°;
+  roll and pitch equal the `HCP` series to ≤0.001°.
+- Grid coordinates are **metric centimetres**: against the HSX `POS`
+  series (a US-survey-foot State Plane grid), dividing the stored
+  integers by 30.4800609601 leaves a constant sub-foot antenna/transducer
+  lever arm with 0.01–0.02 ft scatter, while dividing by 30.48 leaves a
+  ~25 ft error — the 2 ppm international-vs-survey-foot difference at
+  State Plane magnitudes. Tide records (u16 centimetres) equal the HSX
+  `TID` series under the same conversion, record for record.
+- Position records (type 67) carry the grid pair (tracking `POS` with
+  0.01 ft scatter), packed geographic latitude/longitude in the same
+  `ddmmmm.mmmm` encoding as the RAW dialect (decoding to the survey
+  site), an ellipsoidal height consistent with the region, and a UTC
+  seconds-past-midnight double equal to the local time tag plus the
+  session's UTC offset exactly.
+- Sounding (type 69) elevations agree with the HSX single-beam `EC1`
+  series at nadir (median +0.7 ft over 561 pings, the residual being
+  footprint and motion differences) and with the independently surveyed
+  bed elevations for the site. Unfilled swath slots ("no-detect")
+  carry a fixed signature (zero linear scalar, ladder and quality words
+  = 1) and park at the transducer position — verified on all 240,560
+  such records in the capture.
+- Sidescan sample counts in type-70 headers × 4 bytes equal the size of
+  the type-72 payload that follows, for all 618 pairs.
+
+Fields that this validation could not pin (config payloads, the
+uncertainty-candidate scalars, intermediate solver words) are exposed
+verbatim and labelled `unassigned` — see the class docstrings. The
+validation capture is customer data and is **not** distributed with this
+repository; the synthetic writer (`write_hs2x`) reproduces the structure
+for tests. Derived 2026-08-08.
+
+Context on what HS2X is, from HYPACK's public manuals (2023 HYPACK User
+Manual,
+<https://www.xylem.com/siteassets/brand/hypack/resources/manual/2023-hypack-user-manual.pdf>):
+the 64-bit HYSWEEP EDITOR (MBMAX64) edit format. It can be written at any
+stage from initial load ("AUTO SAVE HSX TO HS2X ON LOADING", MULTIBEAM
+AUTO-PROCESSING) through full editing; deleted soundings "are not really
+removed from the data file. Instead they are flagged as deleted", and the
+format also stores TVU/THU. The capture behind S5 was written before any
+editing, so this library's field table does not yet locate the deletion
+flag; an edited/unedited pair of the same line would pin it (issue
+welcome if you can contribute one).
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -69,10 +140,21 @@ form the regression suite in `tests/test_real_data.py`. Consulted
 | POS, GYR, HCP, EC1, TID, FIX, DFT, GPS, PSA, SNR | HSX | S1 | |
 | RMB (+15 array types, bitmask order, XY = 2 lines) | HSX | S1 | writer output pins order |
 | RSS (header + port/starboard sample lines) | HSX | S1 | |
+| TLV framing, type 26 file header | HS2X | S5 | zero broken links file-wide |
+| Type 68 ping header (time, ping, device, SV, grid, attitude) | HS2X | S5 | RMB/GYR/HCP/POS equality |
+| Type 69 sounding (grid cm, elevation, beam angle) | HS2X | S5 | EC1/TID/POS agreement |
+| Types 60/61/62/63/67 (tide, marks, gyro, attitude, position) | HS2X | S5 | record-for-record equality |
+| Types 70/72 sidescan header + samples | HS2X | S5 | internal size consistency |
+| Types 50–55 configuration block | HS2X | S5 (existence) | **payload undecoded → Hs2xOpaque** |
 
 ## Deliberately not implemented
 
 - **EC2** field layout (attested by S3's list only).
-- HS2/HS2X (HYSWEEP *edited* binary/derived data), LOG catalogs, TGT
-  targets, LNW planned-line files: out of scope for 0.1; sources exist in
-  the public HYPACK manuals if contributed with citations.
+- **HS2** (the 32-bit predecessor of HS2X): structure unverified against
+  any capture we hold; per CARIS release notes it lacks even a date field.
+- **HS2X unassigned words** (uncertainty-candidate scalars, intermediate
+  solver offsets, config payloads): carried verbatim, never interpreted,
+  until a vendor description or a decisive validation pins them.
+- LOG catalogs, TGT targets, LNW planned-line files: out of scope for
+  0.2; sources exist in the public HYPACK manuals if contributed with
+  citations.

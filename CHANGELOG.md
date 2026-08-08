@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-08-08
+
+- HYSWEEP® HS2X binary dialect: TLV-chain walker with link verification
+  (`iter_frames`), streaming record parser (`parse_hs2x`) for the file
+  header, tide/time-mark/gyro/attitude/position series, ping headers,
+  beam-solved soundings (grid centimetres, elevation, beam angle,
+  no-detect sentinel), and sidescan header/sample pairs. Undecoded types
+  surface as `Hs2xOpaque`; undecoded words ride along in `unassigned`.
+- Empirical format anchor S5 in docs/FORMAT-SOURCES.md: every named HS2X
+  field cross-validated against the paired HSX log of the same session
+  (no public HS2X specification exists).
+- Dialect sniffing recognizes the HS2X binary magic; sessions and the
+  CLI work unchanged on binary files (JSONL renders payloads as hex).
+- Synthetic HS2X writer (`write_hs2x`) with consistent prev-size links.
+
 ## 0.1.0 — 2026-08-05
 
 Initial release.
