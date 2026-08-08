@@ -706,14 +706,20 @@ class Hs2xPosition(Hs2xTimed):
 
 @dataclass(frozen=True)
 class Hs2xTide(Hs2xTimed):
-    """Type 60 — tide correction.
+    """Type 60 — water level record.
 
-    Payload: time_ms(i32), device(u16), u16, i32, i32, tide(u16,
-    centimetres), u16. Anchor S5: ``tide_cm`` equals the paired HSX ``TID``
-    value converted at the survey-foot factor, record for record.
+    Payload: time_ms(i32), flags(u16), u16, i32, i32, value(u16,
+    centimetres), u16. Anchor S5: the series aligns with the paired HSX
+    ``TID`` records one-to-one on time. Two sub-series share the layout,
+    split by ``flags``: with ``flags`` 0 (329 of 408 in validation),
+    ``tide_cm`` tracks the HSX tide at centimetre level (median 1 cm,
+    occasional 3–7 cm excursions — a differently staged/filtered value,
+    not a byte copy); with ``flags`` 0x0300 (the rest), the value sits
+    ~5.1 m above the tide — an uncorrected water-level candidate. Treat
+    ``flags != 0`` records with care.
     """
 
-    device: int
+    flags: int
     tide_cm: int
     unassigned: tuple[int, ...]
 

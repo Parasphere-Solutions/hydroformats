@@ -118,9 +118,9 @@ def pos_payload(time_ms: int = 49_573_100, easting_cm: int = 45_446_800,
     )
 
 
-def tid_payload(time_ms: int = 49_573_060, device: int = 0,
+def tid_payload(time_ms: int = 49_573_060, flags: int = 0,
                 tide_cm: int = 78) -> bytes:
-    return struct.pack("<i2H2i2H", time_ms, device, 0, -5, -6, tide_cm, 9)
+    return struct.pack("<i2H2i2H", time_ms, flags, 0, -5, -6, tide_cm, 9)
 
 
 def timemark_payload(time_ms: int = 49_573_000) -> bytes:
@@ -269,7 +269,7 @@ def test_heading_attitude_tide_and_timemark_decode():
     hcp = next(r for r in records if isinstance(r, Hs2xAttitude))
     assert (hcp.device, hcp.roll_millideg, hcp.pitch_millideg) == (1, 400, -200)
     tid = next(r for r in records if isinstance(r, Hs2xTide))
-    assert (tid.device, tid.tide_cm) == (0, 78)
+    assert (tid.flags, tid.tide_cm) == (0, 78)
 
 
 def test_position_decodes_grid_and_packed_geographic():

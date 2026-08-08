@@ -168,9 +168,9 @@ def _decode_position(payload: bytes) -> Record:
 
 
 def _decode_tide(payload: bytes) -> Record:
-    time_ms, device, w6, w8, w12, tide, w18 = struct.unpack_from("<i2H2i2H", payload, 0)
+    time_ms, flags, w6, w8, w12, tide, w18 = struct.unpack_from("<i2H2i2H", payload, 0)
     return Hs2xTide(
-        tag="TID", time_ms=time_ms, device=device, tide_cm=tide,
+        tag="TID", time_ms=time_ms, flags=flags, tide_cm=tide,
         unassigned=(w6, w8, w12, w18),
     )
 

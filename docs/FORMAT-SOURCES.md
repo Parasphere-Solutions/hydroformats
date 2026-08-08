@@ -73,8 +73,13 @@ the same logging session** (HYPACK 22.1.5.0, format version string
   integers by 30.4800609601 leaves a constant sub-foot antenna/transducer
   lever arm with 0.01–0.02 ft scatter, while dividing by 30.48 leaves a
   ~25 ft error — the 2 ppm international-vs-survey-foot difference at
-  State Plane magnitudes. Tide records (u16 centimetres) equal the HSX
-  `TID` series under the same conversion, record for record.
+  State Plane magnitudes.
+- Water-level records (type 60, u16 centimetres) align with the HSX
+  `TID` series one-to-one on time. A flags word splits two sub-series:
+  flag 0 tracks the HSX tide at centimetre level (median 1 cm agreement,
+  occasional 3–7 cm excursions — a differently staged value, not a byte
+  copy); flag 0x0300 carries a value ~5.1 m above the tide (uncorrected
+  water-level candidate).
 - Position records (type 67) carry the grid pair (tracking `POS` with
   0.01 ft scatter), packed geographic latitude/longitude in the same
   `ddmmmm.mmmm` encoding as the RAW dialect (decoding to the survey
