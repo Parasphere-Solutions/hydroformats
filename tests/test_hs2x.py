@@ -78,7 +78,7 @@ def ping_payload(
     pitch_millideg: int = 2009,
 ) -> bytes:
     head = struct.pack(
-        "<iI3H2i2i2i3i2i2i2H",
+        "<iI4H2i2i2i2i2i2i2H",
         time_ms, 0xCA5CD27E,
         device, sonar_type, beam_count, 0,
         sound_velocity_cm_s, ping_number,
@@ -91,6 +91,7 @@ def ping_payload(
     )
     tail = bytearray(76)
     tail[28:38] = b"\x01\x03\x00\x00\x00\x01\x01\x00\x00\x00"
+    assert len(head) + len(tail) == 144
     return head + bytes(tail)
 
 
@@ -219,6 +220,11 @@ def test_sounding_decodes_solved_fields_and_unassigned_words():
     assert snd.beam_angle_cdeg == -2345
     assert snd.unassigned == (0, -71650, 2471, 0, 917, 65536, 0, 27, -12800, 0, 0)
     assert not snd.is_no_detect
+    # metric centimetre integers convert exactly to metres
+    assert snd.easting_m == pytest.approx(367_701.23)
+    assert snd.northing_m == pytest.approx(110_304.56)
+    assert snd.elevation_m == pytest.approx(-15.20)
+    assert snd.beam_angle_degrees == pytest.approx(-23.45)
 
 
 def test_sounding_no_detect_sentinel():
@@ -273,8 +279,8 @@ def test_position_decodes_grid_and_packed_geographic():
     assert pos.northing_cm == 11_030_000
     assert pos.latitude_packed == pytest.approx(371_468.1230)
     assert pos.longitude_packed == pytest.approx(-763_027.3607)
-    # ddmmmm.mmmm / 100 -> 37 deg 14.681230 min
-    assert pos.latitude_degrees == pytest.approx(37.24468872, abs=1e-6)
+    # ddmmmm.mmmm / 100 -> 37 deg 14.681230 min -> 37 + 14.681230/60
+    assert pos.latitude_degrees == pytest.approx(37.2446872, abs=1e-6)
     assert pos.longitude_degrees == pytest.approx(-76.50456, abs=1e-4)
     assert pos.ellipsoid_height == pytest.approx(-35.6107)
     assert pos.utc_seconds == pytest.approx(54_058.4022)
