@@ -115,6 +115,35 @@ editing, so this library's field table does not yet locate the deletion
 flag; an edited/unedited pair of the same line would pin it (issue
 welcome if you can contribute one).
 
+**S6: Cerulean Ping Protocol and Surveyor 240-16 public ICD** (Cerulean
+Sonar documentation). The universal packet format page pins the SVLog
+framing: sync bytes `'B'`,`'R'`, u16 payload length, u16 packet id, u8
+source device, u8 destination device, payload, u16 checksum defined as
+the 16-bit truncated sum of every preceding byte in the packet.
+<https://docs.ceruleansonar.com/c/cerulean-ping-protocol/universal-packet-format.md>.
+Per-packet field tables come from the Surveyor 240-16 API pages
+(ATOF_POINT_DATA 3012, YZ_POINT_DATA 3011, ATTITUDE_REPORT 504,
+WATER_STATS 118, SET_PING_PARAMETERS 3023)
+<https://docs.ceruleansonar.com/c/surveyor-240-16/application-programming-interface.md>
+and the general packet definitions (DEVICE_INFORMATION 4, NMEA_WRAPPER
+109, MAVLINK_WRAPPER 150)
+<https://docs.ceruleansonar.com/c/cerulean-ping-protocol/general-packet-definitions.md>.
+Log container semantics (`.svlog` raw packet stream, `.svlz` gzipped,
+sessions auto-split, files concatenable):
+<https://docs.ceruleansonar.com/c/sonarview/log-files>. The framing page
+leaves byte order unstated; little-endian is anchored by the documented
+byte-identical framing with the Blue Robotics Ping Protocol and proven
+on the vendor's published sample survey (the 737-reef `.svlz` on the
+Surveyor 240-16 sample-data page), which parses end to end little-endian
+with zero checksum failures and zero unframed bytes across 121,832
+packets. That sample predates the current API: its point payloads use
+ids 3009 and 3010 (END_PING_INFO in the vendor's packet index), which
+have no published field tables and therefore stay undecoded. The
+machine-readable `surveyor240.json` in the ping-protocol repository
+carries no license and is deliberately neither vendored nor consulted;
+every layout here is hand-built from the cited pages. Consulted
+2026-08-28.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -151,9 +180,19 @@ welcome if you can contribute one).
 | Types 60/61/62/63/67 (tide, marks, gyro, attitude, position) | HS2X | S5 | record-for-record equality |
 | Types 70/72 sidescan header + samples | HS2X | S5 | internal size consistency |
 | Types 50–55 configuration block | HS2X | S5 (existence) | **payload undecoded → Hs2xOpaque** |
+| `'B'``'R'` framing, truncated-sum checksum, svlz gzip | SVLog | S6 | zero failures on the vendor sample |
+| ATOF_POINT_DATA 3012, YZ_POINT_DATA 3011 | SVLog | S6 | reserved words carried verbatim |
+| ATTITUDE_REPORT 504, WATER_STATS 118, SET_PING_PARAMETERS 3023 | SVLog | S6 | pitch/roll formulas per vendor page |
+| DEVICE_INFORMATION 4, NMEA_WRAPPER 109, MAVLINK_WRAPPER 150 | SVLog | S6 | wrappers kept as text |
+| ids 10, 12, 3009, 3010 | SVLog | S6 (index only) | **no public layout: skipped, counted** |
 
 ## Deliberately not implemented
 
+- **SVLog ids 3009, 3010, 10, 12** (the packet family in the vendor's
+  published sample): the vendor index names 3010 END_PING_INFO but
+  publishes no field table for any of them, so they are skipped
+  tolerantly and counted, never guessed. Same for the unlicensed
+  `surveyor240.json` (reference only, not vendored).
 - **EC2** field layout (attested by S3's list only).
 - **HS2** (the 32-bit predecessor of HS2X): structure unverified against
   any capture we hold; per CARIS release notes it lacks even a date field.

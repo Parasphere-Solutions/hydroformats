@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Cerulean SVLog/SVLZ dialect (Surveyor 240-16): checksum-verifying
+  frame scanner with forward resynchronization (`iter_frames`),
+  transparent gzip handling (truncated and concatenated archives
+  included), typed records for ATOF_POINT_DATA, YZ_POINT_DATA,
+  ATTITUDE_REPORT, WATER_STATS, NMEA_WRAPPER, MAVLINK_WRAPPER,
+  DEVICE_INFORMATION, and SET_PING_PARAMETERS (`read_svlog`), the
+  format-defined swath projection `atof_to_yz`, and `load_survey`
+  bundling ping/attitude/nav/water series with stream counters.
+  Public-ICD anchor S6 in docs/FORMAT-SOURCES.md; framing and checksum
+  validated end to end against the vendor's published sample survey.
+
 ## 0.2.0 — 2026-08-08
 
 - HYSWEEP® HS2X binary dialect: TLV-chain walker with link verification

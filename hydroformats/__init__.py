@@ -5,6 +5,7 @@ Supported dialects:
 - HYPACK® RAW (single-beam survey logging): :func:`parse_raw`
 - HYSWEEP® HSX (multibeam text logging): :func:`parse_hsx`
 - HYSWEEP® HS2X (multibeam binary edit format): :func:`parse_hs2x`
+- Cerulean SVLog/SVLZ (Surveyor 240-16 packet logging): :func:`read_svlog`
 
 Most callers want :func:`open_session`, which sniffs the dialect, resolves
 the device registry from the header, and streams typed records::
@@ -25,6 +26,7 @@ from .hs2x import parse_hs2x
 from .hsx import parse_hsx
 from .raw import parse_raw
 from .session import Header, Session, open_session, sniff_dialect
+from .svlog import atof_to_yz, load_survey, read_svlog
 from .synthetic import SyntheticSurvey, write_hs2x, write_hsx, write_raw
 
 __version__ = "0.2.0"
@@ -33,10 +35,13 @@ __all__ = [
     "Header",
     "Session",
     "SyntheticSurvey",
+    "atof_to_yz",
+    "load_survey",
     "open_session",
     "parse_hs2x",
     "parse_hsx",
     "parse_raw",
+    "read_svlog",
     "records",
     "sniff_dialect",
     "write_hs2x",
