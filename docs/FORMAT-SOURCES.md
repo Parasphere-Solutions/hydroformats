@@ -144,6 +144,43 @@ carries no license and is deliberately neither vendored nor consulted;
 every layout here is hand-built from the cited pages. Consulted
 2026-08-28.
 
+**S7: Generic Sensor Format specification and NCEI sample.** The GSF
+reader is anchored to the format's own open specification:
+
+- *Generic Sensor Format Specification*, version 03.09, Leidos doc
+  98-16v, 26 April 2019 (prepared for the Naval Oceanographic Office).
+  Public copy: <https://www3.mbari.org/data/mbsystem/formatdoc/GSF/gsf_spec_03.09.pdf>
+  (Leidos also distributes the specification from its Ocean & Marine
+  pages). Consulted 2026-08-28.
+
+Clean-room note: the reference C library (gsflib) is LGPL and was
+**deliberately not consulted**; every layout in `hydroformats/gsf.py` is
+hand-built from the specification document, and every reading the
+document leaves open is labelled as a judgment in the module docstring
+(checksum framing, beam-array field width derived from subrecord size,
+attitude offset units, summary depth units).
+
+Validation against real archived data: NOAA NCEI's multibeam archive
+publishes GSF files (MB-System format 121). The file used here is
+`ahmba03214.d05.mb121.gz` from survey AHI-03-06 (NOAA survey launch AHI,
+Reson SeaBat 8101, Midway Atoll, August 2003; 13,233,784 bytes
+decompressed, GSF-v02.02):
+<https://data.ngdc.noaa.gov/platforms/ocean/ships/ahi/AHI-03-06/multibeam/data/version1/MB/ahmba03214.d05.mb121.gz>.
+The library frames **every byte of the file with zero skipped bytes and
+zero malformed records** (580 records: 516 pings of 101 beams, 51
+attitude, 7 history, one each of header/SVP/processing-parameter/
+sensor-parameter/comment/summary), the ping positions sit inside the
+summary record's bounding box at Midway, the maximum usable beam depth
+equals the summary maximum exactly (pinning the centimeter reading of
+the summary extremes), scale factors with a nonzero offset decode
+depths onto the 65-73 m bank the summary declares, and the beam angle,
+travel time and sound-speed observables are physically consistent
+(0.5 x 1536 m/s x travel time x cos(angle) reproduces the reported
+depths to within refraction). The file is fetched from NCEI directly
+and is **not** distributed with this repository; the statistics are
+pinned in `tests/test_gsf.py::test_real_sample_statistics` (run with
+`GSF_SAMPLE=<path to decompressed file>`). Consulted 2026-08-28.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -158,6 +195,17 @@ every layout here is hand-built from the cited pages. Consulted
   `Position.extras`.
 - **S2 shows QUA's integer fields as integers**; real S4 files log them
   float-formatted (`12.000`). The parser accepts both.
+- **S7's attitude record table draws five parallel arrays** (all time
+  offsets, then all pitch, roll, heave, heading values). Real GSF data
+  proves the measurements are **interleaved**, one (time, pitch, roll,
+  heave, heading) group per measurement: read interleaved, the S7
+  sample's offsets climb monotonically in 20 ms steps (a 50 Hz motion
+  sensor), the spans equal the base-time gaps between consecutive
+  attitude records exactly (which also pins the offsets as
+  milliseconds, a unit the table never states), and pitch/roll/heave/
+  heading track the ping-header values; read as parallel arrays the
+  same bytes decode to physically impossible motion. The library
+  decodes interleaved.
 
 ## Record-by-record anchoring
 
@@ -185,6 +233,14 @@ every layout here is hand-built from the cited pages. Consulted
 | ATTITUDE_REPORT 504, WATER_STATS 118, SET_PING_PARAMETERS 3023 | SVLog | S6 | pitch/roll formulas per vendor page |
 | DEVICE_INFORMATION 4, NMEA_WRAPPER 109, MAVLINK_WRAPPER 150 | SVLog | S6 | wrappers kept as text |
 | ids 10, 12, 3009, 3010 | SVLog | S6 (index only) | **no public layout: skipped, counted** |
+| Record framing (u32 size, u32 identifier, optional checksum) | GSF | S7 | big endian per spec 3.6.2/4.3.1 |
+| HEADER, ping header (42- and 56-byte forms) | GSF | S7 | Tables 4-2, 4-3 |
+| Scale factors (id 100: divide, subtract offset) | GSF | S7 | nonzero offset proven on the S7 sample |
+| Depth/nominal/across/along/travel-time/angle arrays (1-5, 14) | GSF | S7 | width from subrecord size |
+| Beam flags 16, quality factor 9, error arrays 11-13, 19-20, 27-28 | GSF | S7 | flag bits per Appendix C |
+| SVP 3, COMMENT 6, HISTORY 7, PROCESSING_PARAMETERS 4, SUMMARY 9 | GSF | S7 | Tables 4-6 to 4-11 |
+| ATTITUDE 12 (interleaved measurements, ms offsets) | GSF | S7 | see anchor errata |
+| SENSOR_PARAMETERS 5, ids 8/10/11, sensor subrecords 102+, intensity 21 | GSF | S7 (existence) | **skipped, counted by id** |
 
 ## Deliberately not implemented
 
@@ -202,3 +258,14 @@ every layout here is hand-built from the cited pages. Consulted
 - LOG catalogs, TGT targets, LNW planned-line files: out of scope for
   0.2; sources exist in the public HYPACK manuals if contributed with
   citations.
+- **GSF sensor-specific subrecords** (Appendix B: fifty-plus per-sonar
+  layouts) and the **intensity time series** (id 21, whose imagery block
+  is itself sensor-specific): skipped tolerantly and counted by id. The
+  spec defines them, but they are per-sonar surface area far beyond the
+  core swath observables; contributions welcome with spec table
+  citations.
+- **GSF single-beam sounding record** (id 10, discouraged since v2.03),
+  the obsolete **NAVIGATION_ERROR** (id 8), **HV_NAVIGATION_ERROR**
+  (id 11) and **SENSOR_PARAMETERS** (id 5): skipped tolerantly and
+  counted, not decoded.
+- **GSF writing**: this library reads GSF only.

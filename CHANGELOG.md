@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Generic Sensor Format (GSF) read-only dialect: record walker with
+  checksum verification and graceful truncation handling
+  (`iter_records`), typed records for the header, swath bathymetry pings
+  (both the 42-byte pre-03.01 and 56-byte ping headers, the full
+  scale-factor machinery including nonzero offsets and per-file
+  persistence, and the standard beam arrays: depth, nominal depth,
+  across/along track, travel time, beam angle, beam flags, quality,
+  error and uncertainty arrays), sound velocity profiles, attitude
+  series, comments, history, processing parameters and swath summaries
+  (`read_gsf`), plus `load_swath` bundling the series with record and
+  subrecord counters. Unknown records and sensor-specific subrecords are
+  skipped tolerantly and counted by id. Spec anchor S7 in
+  docs/FORMAT-SOURCES.md (clean-room from the Leidos specification, no
+  gsflib); validated end to end against a real NCEI-archived survey
+  file, which also pinned an attitude-record layout erratum against the
+  spec table.
+
 - Cerulean SVLog/SVLZ dialect (Surveyor 240-16): checksum-verifying
   frame scanner with forward resynchronization (`iter_frames`),
   transparent gzip handling (truncated and concatenated archives
