@@ -181,6 +181,72 @@ and is **not** distributed with this repository; the statistics are
 pinned in `tests/test_gsf.py::test_real_sample_statistics` (run with
 `GSF_SAMPLE=<path to decompressed file>`). Consulted 2026-08-28.
 
+**S8: Sound Metrics ARIS File SDK and public DIDSON description.** The
+DDF reader (`hydroformats/aris.py`) is anchored to the sonar
+manufacturer's own MIT-licensed SDK, whose reference type definitions
+may be read and translated with attribution (carried in the module
+docstring):
+
+- ARIS File SDK, Sound Metrics Corp., MIT license,
+  <https://github.com/SoundMetrics/aris-file-sdk> (commit `5329f18`,
+  2026-05-11). Files used: `type-definitions/C/FileHeader.h` and
+  `type-definitions/C/FrameHeader.h` (every field name, type and byte
+  offset for the DDF v5 file and frame headers, including the offset
+  enums the parser's field tables mirror),
+  `common-code/FrameFuncs.c` (`get_beams_from_pingmode`, translated as
+  `beam_count_for_ping_mode`: modes 1-2 give 48 beams, 3-5 give 96,
+  6-8 give 64, 9-12 give 128, anything else 0), and
+  `docs/understanding-aris-data.md` (container layout: one file header
+  then uniform frames of header plus beams x samples bytes; sample
+  ordering with beam 0 rightmost; the window start/length/sample
+  spacing formulas; the guidance to trust frame headers over the
+  writer-populated file header). The repository's `sample-code/sample.aris`
+  is the v5 validation file below. Consulted 2026-08-29.
+- Echoview's public DIDSON data file description,
+  <https://support.echoview.com/WebHelp/Reference/File_Formats/DIDSON_data_files.htm>:
+  the DDF v3 header sizes (512-byte master header, 256-byte frame
+  headers, against 1024/1024 from v4 on) and the v3 range decode (start
+  range = window start code x delay period x sound speed / 2; the
+  four-cell delay period table by HighResolution and serial number:
+  0.001024 / 0.001144 / 0.000512 / 0.000572 seconds). Consulted
+  2026-08-29.
+
+The v3 field layout inside those header sizes is not published
+byte-by-byte anywhere public. The reading used here: the SDK states the
+ARIS headers preserved the legacy DIDSON parameters unchanged for
+backward compatibility, so the v3 headers are read with the v5 layout
+truncated to the v3 sizes, with three deviations proven on the real
+clips below: the window start/length words are u32 codes (the SDK's own
+field comments say "code [0..31]" / "code [0..3]" for DIDSON) where v5
+stores f32 meters; the eight words from offset 20 are a full calendar
+clock (year, month, day, hour, minute, second, hundredths; v5 overlays
+year and month with its u64 PC timestamp, which is why the v5 `TS_`
+fields begin at day); and the 64-bit sonar time counts whole seconds.
+Under this reading the clips' calendar clocks match their filenames,
+compass heading/pitch/roll decode to plausible attitudes, receiver gain
+and window codes equal the file header's, and the frame cycle word
+matches the declared frame rate (143 ms at 7 fps).
+
+Validation against real data (statistics pinned in
+`tests/test_aris.py`, run with `ARIS_SAMPLE=<path to sample.aris>` and
+`DDF_SAMPLE_DIR=<path to the .ddf directory>`; neither dataset is
+distributed with this repository):
+
+- **DDF v5**: the SDK's own `sample.aris` (583,168 bytes). Six frames
+  of 48 beams x 2000 samples walk with zero skipped bytes, every frame
+  signature intact; ping mode 1 on an ARIS 1200 (system type 2, serial
+  1098, telephoto lens); microsecond frame times strictly increasing at
+  152.6 ms spacing matching the recorded 6.548 Hz frame rate; strong
+  image energy in every frame.
+- **DDF v3**: ten raw DIDSON sturgeon-monitoring clips recorded
+  2007-10-31 to 2007-11-02 (CC0, USACE/ERDC "DIDSON data collected at
+  dams" release). All ten: 96 beams x 512 samples, high frequency,
+  serial 189, receiver gain 40, sound speed word 1457 m/s. The declared
+  frame counts equal the counts implied by file size exactly (1,569
+  frames total, zero leftover bytes), every frame signature is the v3
+  magic, frame indices count from zero, and the calendar clocks are
+  non-decreasing within every file.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -206,6 +272,29 @@ pinned in `tests/test_gsf.py::test_real_sample_statistics` (run with
   heading track the ping-header values; read as parallel arrays the
   same bytes decode to physically impossible motion. The library
   decodes interleaved.
+- **S8's stored ARIS window floats carry a writer default sound speed.**
+  The SDK teaches deriving window start and length from
+  SampleStartDelay, SamplePeriod, SamplesPerBeam and the frame's
+  SoundSpeed, and the frame header also stores WindowStart/WindowLength
+  floats. In `sample.aris` the two disagree: the stored floats (3.3299 m
+  and 20.30 m) back-solve to a nominal 1450 m/s, while the frame's own
+  calculated SoundSpeed is 1435.93 m/s (formula values 3.2976 m and
+  20.103 m). The library surfaces the stored floats verbatim and derives
+  the self-consistent values as properties; consumers who care about
+  range accuracy should use the derived ones.
+- **Echoview's v3 WindowStart range is understated.** Its DDF_03 page
+  says WindowStart "is 0, 1, 2, or 3"; the S8 clips carry start codes
+  1, 4, 6 and 12, and the SDK's own file header comment says the DIDSON
+  start code spans [0..31] (0..3 matches the length code instead). The
+  decode formula itself checks out: at the header's 1457 m/s the first
+  clip's code 4 gives a 1.667 m start and a 10.003 m window, consistent
+  with a short-range HF fish-counting deployment.
+- **The v3 whole-second sonar time lags its own calendar clock.** In
+  the S8 clips the 64-bit sonar time word can still hold the previous
+  second after the calendar fields (which carry the hundredths) have
+  rolled over, so combining the two produces a non-monotonic clock.
+  The calendar fields are internally consistent and non-decreasing
+  file-wide; the library treats them as the frame clock.
 
 ## Record-by-record anchoring
 
@@ -241,6 +330,13 @@ pinned in `tests/test_gsf.py::test_real_sample_statistics` (run with
 | SVP 3, COMMENT 6, HISTORY 7, PROCESSING_PARAMETERS 4, SUMMARY 9 | GSF | S7 | Tables 4-6 to 4-11 |
 | ATTITUDE 12 (interleaved measurements, ms offsets) | GSF | S7 | see anchor errata |
 | SENSOR_PARAMETERS 5, ids 8/10/11, sensor subrecords 102+, intensity 21 | GSF | S7 (existence) | **skipped, counted by id** |
+| DDF magic words (v5 0x05464444, v3 0x03464444), container lattice | DDF | S8 | signature doubles as version |
+| v5 file header (1024 B) and frame header (1024 B), all named fields | DDF | S8 | SDK offset enums, mirrored |
+| Ping mode to beam count table (48/96/64/128) | DDF | S8 | FrameFuncs.c, translated |
+| Window start/length/sample spacing formulas (v5) | DDF | S8 | see anchor errata on stored floats |
+| v3 header sizes (512 B / 256 B), delay period table, range decode | DDF | S8 (Echoview) | see anchor errata on the code range |
+| v3 field layout (shared legacy layout, 3 deviations) | DDF | S8 | proven on the CC0 clips |
+| Sample ordering (range row major, beam 0 rightmost) | DDF | S8 | uniform frames per the SDK |
 
 ## Deliberately not implemented
 
@@ -269,3 +365,22 @@ pinned in `tests/test_gsf.py::test_real_sample_statistics` (run with
   (id 11) and **SENSOR_PARAMETERS** (id 5): skipped tolerantly and
   counted, not decoded.
 - **GSF writing**: this library reads GSF only.
+- **DDF v4** (magic 0x04464444, the DIDSON format between the two
+  supported versions): 1024-byte headers per Echoview, but no v4 capture
+  is in hand to validate a layout against, so the magic is not claimed
+  and such files degrade to a MalformedRecord naming the version word.
+  Contributions welcome with a real v4 file.
+- **ARIS beam spacing tables** (the SDK's `beam-width-metrics` headers):
+  cross-range pixel geometry needs the per-lens beam angle tables; they
+  are deliberately not vendored here, and the reader stops at downrange
+  geometry (window bounds, sample spacing) plus raw frames. A consumer
+  building metric imagery should load the SDK's tables directly.
+- **Live-stream sample reordering** (`ReorderedSamples` zero): recorded
+  files carry ordered samples per the SDK; the raw-multiplexed order of
+  live ARIS streams is out of scope for a file reader. The flag is
+  surfaced so callers can refuse unordered frames.
+- **DDF v3 low-frequency and long-range variants**: the delay period
+  table implements all four Echoview cells, but every S8 clip is a
+  high-frequency serial-189 file, so the other three cells are anchored
+  by the table alone, not by data.
+- **DDF writing**: this library reads DDF only.

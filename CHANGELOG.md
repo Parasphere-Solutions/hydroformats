@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Sound Metrics DDF read-only dialect, the library's first imaging
+  sonar (acoustic camera) format: ARIS recordings (.aris, DDF v5) and
+  original DIDSON recordings (.ddf, DDF v3), discriminated by the file's
+  leading version magic. Typed file header and per-frame records
+  (`read_aris`) carrying timestamps on both formats' clocks, the sonar
+  settings that shape each image (ping mode and its beam count per the
+  SDK table, samples per beam, sample period and start delay, gain,
+  frequency, sound speed), compass/platform attitude and GPS fields
+  where the headers define them, the raw frame image bytes with row and
+  beam-profile access, and per-frame downrange geometry in meters
+  (stored and derived window start/length, sample spacing; the v3 window
+  code decode via the published delay-period table). `load_imaging`
+  bundles the file header, frame series and stream counters (signature
+  and geometry mismatch counts, skipped bytes). Truncation and garbage
+  degrade to `MalformedRecord`, never exceptions. Anchor S8 in
+  docs/FORMAT-SOURCES.md (translated from the manufacturer's
+  MIT-licensed ARIS File SDK, with the DDF v3 particulars from
+  Echoview's public description); validated end to end against the
+  SDK's own sample.aris and ten CC0 raw DIDSON clips, which also pinned
+  three errata (writer-default sound speed baked into stored ARIS
+  window floats, an understated v3 window-code range, and the v3
+  whole-second clock lagging its calendar fields).
+
 - Generic Sensor Format (GSF) read-only dialect: record walker with
   checksum verification and graceful truncation handling
   (`iter_records`), typed records for the header, swath bathymetry pings

@@ -7,6 +7,7 @@ Supported dialects:
 - HYSWEEP® HS2X (multibeam binary edit format): :func:`parse_hs2x`
 - Cerulean SVLog/SVLZ (Surveyor 240-16 packet logging): :func:`read_svlog`
 - Generic Sensor Format (swath bathymetry interchange): :func:`read_gsf`
+- Sound Metrics ARIS/DIDSON DDF (imaging sonar): :func:`read_aris`
 
 Most callers want :func:`open_session`, which sniffs the dialect, resolves
 the device registry from the header, and streams typed records::
@@ -23,6 +24,7 @@ Every record class documents the source anchoring its field layout; see
 :class:`~hydroformats.records.Hs2xOpaque` (binary) — nothing is guessed.
 """
 from . import records
+from .aris import beam_count_for_ping_mode, load_imaging, read_aris
 from .gsf import load_swath, read_gsf
 from .hs2x import parse_hs2x
 from .hsx import parse_hsx
@@ -38,12 +40,15 @@ __all__ = [
     "Session",
     "SyntheticSurvey",
     "atof_to_yz",
+    "beam_count_for_ping_mode",
+    "load_imaging",
     "load_survey",
     "load_swath",
     "open_session",
     "parse_hs2x",
     "parse_hsx",
     "parse_raw",
+    "read_aris",
     "read_gsf",
     "read_svlog",
     "records",
