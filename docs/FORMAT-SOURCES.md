@@ -247,6 +247,75 @@ distributed with this repository):
   magic, frame indices count from zero, and the calendar clocks are
   non-decreasing within every file.
 
+**S9: EdgeTech JSF interface control document.** The JSF reader
+(`hydroformats/jsf.py`, records in `hydroformats/jsf_records.py`) is
+anchored to the format owner's own public description:
+
+- *JSF File and Message Descriptions*, EdgeTech document 0023492
+  Rev. R, December 22, 2025.
+  <https://www.edgetech.com/wp-content/uploads/2023/04/0023492_Rev_R.pdf>
+  (the document's License Statement permits redistribution without
+  modification). Consulted 2026-08-30.
+
+Clean-room note: no third-party JSF parser code was consulted; every
+layout is hand-built from the document's tables (message header
+Table 2-1; sonar data Tables 2-2 through 2-10 with Equation 2-2-1 for
+block floating point expansion; system information Table 2-17; NMEA,
+pitch roll and pressure sensor Tables 2-19 through 2-21; bathymetric
+data Tables 2-28 and 2-29 with Equations 2-2 through 2-8; attitude,
+pressure, altitude and position Tables 2-30 through 2-33). Byte order
+is little endian throughout per the document's section 1.2, pinned
+byte-for-byte in `tests/test_jsf.py`. Readings the document leaves open
+are labelled as judgments in the module docstrings:
+
+- The type 3000 angle scale factor is read as a 4-byte float where the
+  table prints UINT32: its unit is degrees, Equation 2-5 multiplies it
+  directly onto a signed 16-bit count (which no whole number of degrees
+  could scale to sub-degree angles), and every neighboring scale and
+  accuracy word in the same table is a float.
+- The type 3002 validity bits are read in field order (bit 0 pressure
+  through bit 5 depth); the document defers to the 3001 description
+  without listing bits, and field order is the rule both of its fully
+  enumerated validity tables follow.
+- The type 80 sample interval fraction byte (LSB1 bits 0-7) is carried
+  verbatim, never interpreted: the document names the field without
+  stating its encoding, unlike the course, speed and sweep fractions,
+  whose decimal-digit encodings it does state.
+
+Validation against real archived data: the MGDS/IEDA marine geoscience
+archive publishes raw JSF. The file used here is
+`galv2017_line07.000.jsf` from the Trinity River Paleovalley project
+(EdgeTech SB-512i chirp sub-bottom with a 3200-XS topside, offshore
+Galveston TX, 2017-05-23; 100,005,102 bytes; Goff & Gulick 2020,
+doi:10.1594/IEDA/326817, dataset
+<https://www.marine-geo.org/tools/search/Files.php?data_set_uid=26817>,
+fetched via the archive's terms-accept POST endpoint,
+`api.marine-geo.org/services/download/download_accept.php` with
+`data_uids=1348405`). The archive licenses it CC BY-NC-SA 3.0 US, so it
+is a local test fixture only and is **not** distributed with this
+repository. The library frames **every byte with zero skipped bytes
+and zero malformed records** (13,136 messages: 8,421 type 80 sonar
+messages, 3,368 NMEA strings, 1,347 type 2040 messages that Rev R does
+not document, skipped and counted). Consecutive ping numbers at 5 Hz
+across the 28-minute line; the sample interval and sample frequency
+words reproduce each other; the 0.7-12 kHz sweep matches the sonar;
+the CPU calendar block equals the seconds-since-1970 word on all 8,421
+pings (pinning both time decodes; the recorder's clock was unset at
+2003, and the reader surfaces both it and the NMEA fix riders'
+true 2017 date faithfully); the position riders decode from
+ten-thousandths of minutes of arc into the Galveston box the
+interleaved GPRMC sentences independently pin, with fix times agreeing
+to the second; and the per-ping block floating point exponents span
+3-7 with raw mantissas normalized into the 16-bit range. Statistics
+pinned in `tests/test_jsf.py::test_real_sample_statistics` (run with
+`JSF_SAMPLE=<path to the .jsf>`). No publicly downloadable EdgeTech
+6205 file (dual-frequency side scan plus type 3000 bathymetry)
+surfaced anywhere in NCEI, USGS ScienceBase/CMGDS, R2R or MGDS, so the
+type 3000 decode and the port/starboard and dual-frequency channel
+mapping rest on the ICD tables and synthetic fixtures until the first
+partner 6205 files arrive; those would pin the remaining statistics
+immediately. Consulted 2026-08-30.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -289,6 +358,11 @@ distributed with this repository):
   decode formula itself checks out: at the header's 1457 m/s the first
   clip's code 4 gives a 1.667 m start and a 10.003 m window, consistent
   with a short-range HF fish-counting deployment.
+- **S9's NMEA source byte enumeration is incomplete.** The ICD lists
+  the type 2002 source values as 1 = Sonar, 2 = Discover, 3 = ETSI;
+  every one of the 3,368 NMEA messages in the S9 sample (written by
+  Discover 15.1) carries source 0. The value is surfaced raw, never
+  mapped to a name.
 - **The v3 whole-second sonar time lags its own calendar clock.** In
   the S8 clips the 64-bit sonar time word can still hold the previous
   second after the calendar fields (which carry the hundredths) have
@@ -337,6 +411,14 @@ distributed with this repository):
 | v3 header sizes (512 B / 256 B), delay period table, range decode | DDF | S8 (Echoview) | see anchor errata on the code range |
 | v3 field layout (shared legacy layout, 3 deviations) | DDF | S8 | proven on the CC0 clips |
 | Sample ordering (range row major, beam 0 rightmost) | DDF | S8 | uniform frames per the SDK |
+| 16-byte message header (0x1601 marker, subsystem/channel) | JSF | S9 | Table 2-1, little endian |
+| Sonar data 80: 240-byte header, block floating point trace | JSF | S9 | Tables 2-2 to 2-10, Equation 2-2-1 |
+| MSB/LSB extensions (samples, frequencies, mark, course, speed, sweep) | JSF | S9 | Table 2-2; interval fraction verbatim |
+| System information 182 | JSF | S9 | Table 2-17, growable tail tolerated |
+| NMEA 2002, pitch roll 2020, pressure sensor 2060 | JSF | S9 | Tables 2-19 to 2-21 |
+| Bathymetric data 3000: header + revision 4/5 sample sets | JSF | S9 | Tables 2-28, 2-29; Equations 2-2 to 2-8 |
+| Attitude 3001, pressure 3002, altitude 3003, position 3004 | JSF | S9 | Tables 2-30 to 2-33 |
+| JSF types 40, 181, 1260, 2071, 2080, 2091, 2100, 2101, 2111, 3005, 3041, 4000, 4034 | JSF | S9 (existence) | **skipped, counted by type** |
 
 ## Deliberately not implemented
 
@@ -384,3 +466,19 @@ distributed with this repository):
   high-frequency serial-189 file, so the other three cells are anchored
   by the table alone, not by data.
 - **DDF writing**: this library reads DDF only.
+- **JSF message types without a decoding need here** (sonar status 40,
+  navigation offsets 181, target file data 1260 with its embedded
+  JPEGs, reflection coefficient 2071, DVL 2080, situation 2091, cable
+  counter 2100, kilometer of pipe 2101, container timestamp 2111, GPS
+  status 3005, bathymetric parameters 3041, and the eBOSS beamformed
+  4000/4034 family): defined by S9 but outside the side scan, bathymetry
+  and navigation observables this library targets; skipped tolerantly
+  and counted by type, contributions welcome with table citations.
+- **JSF type 3000 format revisions 0 through 3**: the ICD details only
+  the revision 4+ sample layout and calls the interferometric output
+  rarely used; older revisions decode the header and leave the sample
+  arrays None.
+- **JSF type 80 proprietary data formats** (format word above 255): the
+  header decodes, the trace stays None; the ICD says only that such
+  data is in an EdgeTech proprietary format.
+- **JSF writing**: this library reads JSF only.

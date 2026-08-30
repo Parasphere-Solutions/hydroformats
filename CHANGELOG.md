@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- EdgeTech JSF read-only dialect (the native recording format of the
+  Discover/JStar topsides, including the 6205 dual-frequency
+  bathymetric side scan): marker-verified message walker with forward
+  resynchronization on the 0x1601 header marker (`iter_messages`),
+  typed records (`read_jsf`) for sonar data messages (type 80: the full
+  240-byte header, raw 16-bit block floating point trace integers plus
+  a `scaled()` accessor applying the ICD's 2^-N weighting factor rule,
+  the 20-bit MSB field extensions and fractional LSB digits, channel
+  and frequency identification from the subsystem/channel words),
+  bathymetric data messages (type 3000: per-sounding time delay and
+  angle counts with both scale factors, 0.5 dB amplitudes, angle
+  uncertainties, SNR/quality/cleaning flags, the logged TVG, and
+  hand-checkable accessors for echo time, angle from nadir, slant range
+  and raw x/z soundings), system information (182), NMEA strings
+  (2002), pitch roll (2020), pressure sensor readings (2060), and the
+  3001/3002/3003/3004 attitude, pressure, altitude and position
+  messages. `hydroformats.jsf.load_survey` bundles per-channel side
+  scan series, bathymetric pings, navigation/attitude/sensor series and
+  stream counters (unknown types counted by id, skipped bytes); it is
+  exported at the package level as `load_jsf` because SVLog holds the
+  package-level `load_survey` name. Unknown message types skip
+  tolerantly; truncation degrades to `MalformedRecord`, never
+  exceptions. Clean-room ICD anchor S9 in docs/FORMAT-SOURCES.md
+  (EdgeTech document 0023492 Rev. R; no third-party parser consulted);
+  validated end to end against a real archived SB-512i chirp line
+  (every byte framed, zero malformed, both time tracks and the
+  navigation riders cross-pinned against the interleaved NMEA stream),
+  which also surfaced an NMEA source-byte erratum. The type 3000
+  bathymetric decode rests on the ICD tables and synthetic fixtures
+  until a real 6205 file is available (none is publicly downloadable).
+
 - Sound Metrics DDF read-only dialect, the library's first imaging
   sonar (acoustic camera) format: ARIS recordings (.aris, DDF v5) and
   original DIDSON recordings (.ddf, DDF v3), discriminated by the file's
