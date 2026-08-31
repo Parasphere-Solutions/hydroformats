@@ -32,6 +32,31 @@
   which also surfaced an NMEA source-byte erratum. The type 3000
   bathymetric decode rests on the ICD tables and synthetic fixtures
   until a real 6205 file is available (none is publicly downloadable).
+- Triton XTF read-only dialect, the industry's broadest sidescan
+  interchange format (Klein, EdgeTech, Kongsberg, Benthos, CMAX and
+  many more chains export it). File header with the full CHANINFO
+  channel blocks (channel type, sub-channel number, correction flags,
+  polarity, bytes per sample and sample format, mounting offsets),
+  0xFACE packet framing with resynchronization on the magic word, and
+  typed records (`read_xtf`) for sonar pings (256-byte ping header
+  with per-ping nav/attitude/tow fields plus per-channel headers and
+  raw sample bytes with on-demand 8/16/32-bit and IEEE-float decoding),
+  attitude packets, notes, raw serial (NMEA) lines, raw vendor
+  bathymetry passthrough, and Reson bathy snippet packets (SNP0/SNP1
+  headers decoded, fragments carried raw). `hydroformats.xtf.load_survey`
+  (exported at package level as `load_sidescan`) bundles the header,
+  per-channel ping series with channel metadata, attitude/notes/serial
+  series and stream counters; unknown packet types are skipped and
+  counted by type. XTF's navigation duplication (ship vs sensor
+  position, layback vs coordinates) is surfaced field for field and
+  deliberately not resolved: georeferencing policy belongs to the
+  consumer. Spec anchor S10 in docs/FORMAT-SOURCES.md (clean-room from
+  Triton's Rev. 41 specification, no third-party parser consulted);
+  validated end to end against Triton's own published demo survey,
+  which framed every byte exactly and pinned three spec errata (the
+  attitude table's misprinted prefix offsets, the ping header's
+  overlapping tail offsets, and a UniPolar flag that contradicts the
+  demo data's own samples).
 
 - Sound Metrics DDF read-only dialect, the library's first imaging
   sonar (acoustic camera) format: ARIS recordings (.aris, DDF v5) and

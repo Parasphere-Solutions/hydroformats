@@ -9,6 +9,10 @@ Supported dialects:
 - Generic Sensor Format (swath bathymetry interchange): :func:`read_gsf`
 - Sound Metrics ARIS/DIDSON DDF (imaging sonar): :func:`read_aris`
 - EdgeTech JSF (side scan and bathymetric side scan): :func:`read_jsf`
+- Triton XTF (sidescan interchange): :func:`read_xtf`; the survey bundle
+  is :func:`hydroformats.xtf.load_survey`, exported here as
+  :func:`load_sidescan` because the SVLog loader claimed the
+  ``load_survey`` name first
 
 Most callers want :func:`open_session`, which sniffs the dialect, resolves
 the device registry from the header, and streams typed records::
@@ -41,6 +45,8 @@ from .raw import parse_raw
 from .session import Header, Session, open_session, sniff_dialect
 from .svlog import atof_to_yz, load_survey, read_svlog
 from .synthetic import SyntheticSurvey, write_hs2x, write_hsx, write_raw
+from .xtf import load_survey as load_sidescan
+from .xtf import read_xtf
 
 __version__ = "0.2.0"
 
@@ -52,6 +58,7 @@ __all__ = [
     "beam_count_for_ping_mode",
     "load_imaging",
     "load_jsf",
+    "load_sidescan",
     "load_survey",
     "load_swath",
     "open_session",
@@ -62,6 +69,7 @@ __all__ = [
     "read_gsf",
     "read_jsf",
     "read_svlog",
+    "read_xtf",
     "records",
     "sniff_dialect",
     "write_hs2x",

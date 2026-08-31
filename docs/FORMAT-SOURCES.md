@@ -315,6 +315,49 @@ type 3000 decode and the port/starboard and dual-frequency channel
 mapping rest on the ICD tables and synthetic fixtures until the first
 partner 6205 files arrive; those would pin the remaining statistics
 immediately. Consulted 2026-08-30.
+**S10: Triton XTF specification.** The XTF reader
+(`hydroformats/xtf.py`) is anchored to the format owner's own
+specification document:
+
+- Triton Imaging, Inc., *eXtended Triton Format (XTF) Rev. 41*,
+  September 2016 (revision history X1 2002-01-15 through X41
+  2016-09-16). Distributed by Triton from
+  `tritonimaginginc.com/site/content/public/downloads/FileFormatInfo/`;
+  that download area is offline today (the domain is now an ECA Group
+  landing page), so the copy used is the Internet Archive capture:
+  <https://web.archive.org/web/20170418082139/http://www.tritonimaginginc.com/site/content/public/downloads/FileFormatInfo/Xtf%20File%20Format_X41.pdf>.
+  Rev. 41 is the newest revision the Archive holds; the MBARI
+  MB-System format-document mirror carries the older Rev. 26
+  (<https://www3.mbari.org/data/mbsystem/formatdoc/XtfFileFormat_X26.pdf>)
+  for cross-checking. Consulted 2026-08-30.
+
+Clean-room note: several open-source XTF parsers exist and were
+**deliberately not consulted**; every layout in `hydroformats/xtf.py`
+is hand-built from the specification document, and every reading the
+document leaves open is documented in the module docstring (the
+attitude table's misprinted prefix offsets, the ping header's
+overlapping tail offsets, integer sample signedness via the UniPolar
+word, the undecoded IBM float sample format).
+
+Validation against real data: `Demoplane.xtf`, the demo sidescan
+survey Triton itself distributed from the same public downloads area
+(`.../downloads/DemoFiles/Demoplane.xtf`), retrieved from the Internet
+Archive capture of 2005-11-09:
+<https://web.archive.org/web/20051109135308/http://www.tritonimaginginc.com/site/content/public/downloads/DemoFiles/Demoplane.xtf>
+(25,587,648 bytes; an Isis Server recording of a sunken aircraft
+survey, Puget Sound, 2000-07-07, converted with DAT2XTF 153; vendor
+demo data published without a license text, so it is fetched from the
+Archive for local validation and **not** redistributed with this
+repository). The reader frames **every byte of the file exactly**:
+1,024 header bytes plus 2,009 sonar packets of 256 + 3 x (64 + 4,096)
+bytes, with zero skipped bytes, zero malformed packets and zero
+unknown packet types. Ping numbers count 1..2009 without a gap, all
+three declared 16-bit channels (port, starboard, subbottom; 2,048
+samples at 90 m slant range) appear on every ping, and the sensor
+track decodes to a small box at 47.676 N 122.240 W consistent with the
+survey story. The statistics are pinned in
+`tests/test_xtf.py::test_real_sample_statistics` (run with
+`XTF_SAMPLE=<path to Demoplane.xtf>`). Consulted 2026-08-30.
 
 ## Anchor errata
 
@@ -369,6 +412,29 @@ immediately. Consulted 2026-08-30.
   rolled over, so combining the two produces a non-monotonic clock.
   The calendar fields are internally consistent and non-decreasing
   file-wide; the library treats them as the frame clock.
+- **S10's XTFATTITUDEDATA table misprints its own prefix.** It lists
+  HeaderType at byte offset 1 and SubChannelNumber at 2, but the magic
+  word at offset 0 is a WORD spanning bytes 0-1 and every other packet
+  table in the same document puts them at 2 and 3. The library reads
+  the uniform 14-byte prefix everywhere; the real S10 sample's packets
+  frame end to end under that reading.
+- **S10's XTFPINGHEADER tail overlaps itself.** The table lists
+  ReservedSpace2[6] at offset 245 while also defining OptionalOffset
+  (a 4-byte word at 245) and CableOutHundredths (249). Reserved space
+  is read as bytes 250-255, the only reading that fills the stated
+  256-byte structure exactly.
+- **S10's UniPolar flag does not match its own demo data.** The spec
+  says UniPolar 0 means polar (signed) samples; Demoplane.xtf declares
+  0 on all three channels, yet the 16-bit samples are almost entirely
+  non-negative amplitudes with a scattering of 0x8001-magnitude words
+  (clip sentinels under the signed reading). The library decodes per
+  the declared flag and takes a ``signed`` override, and the raw
+  sample bytes always ride along so consumers can re-read.
+- **S10's nav duplication is real.** The ping header carries ship and
+  sensor positions side by side; in the S10 sample only the sensor
+  pair is populated (ship stays 0.0) even though layback is zero.
+  Which position (and whether to swing layback) georeferences the
+  imagery is left to the consumer, per the module docstring.
 
 ## Record-by-record anchoring
 
@@ -419,6 +485,14 @@ immediately. Consulted 2026-08-30.
 | Bathymetric data 3000: header + revision 4/5 sample sets | JSF | S9 | Tables 2-28, 2-29; Equations 2-2 to 2-8 |
 | Attitude 3001, pressure 3002, altitude 3003, position 3004 | JSF | S9 | Tables 2-30 to 2-33 |
 | JSF types 40, 181, 1260, 2071, 2080, 2091, 2100, 2101, 2111, 3005, 3041, 4000, 4034 | JSF | S9 (existence) | **skipped, counted by type** |
+| XTFFILEHEADER (1024 B + growth), CHANINFO (128 B) | XTF | S10 | Tables C, D |
+| Packet prefix (magic 0xFACE, type, size), resync on magic | XTF | S10 | Table H; section 2.2 |
+| XTFPINGHEADER 256 B (nav, attitude, tow, CTD fields) | XTF | S10 | Table H; tail offsets per errata |
+| XTFPINGCHANHEADER 64 B + samples (8/16/32-bit, IEEE float) | XTF | S10 | Tables D, I; signedness per errata |
+| XTFATTITUDEDATA 3, XTFNOTESHEADER 1, XTFRAWSERIALHEADER 6 | XTF | S10 | Tables E, F, G; prefix per errata |
+| XTFBATHHEADER 2 (vendor payload verbatim) | XTF | S10 | Figure 3: "logged raw" |
+| BATHY_SNIPPET 19: SNP0/SNP1 headers, raw fragments | XTF | S10 | Tables N, O |
+| Header types 4-18, 20-108, 199-200 | XTF | S10 (list only) | **skipped, counted by type** |
 
 ## Deliberately not implemented
 
@@ -482,3 +556,16 @@ immediately. Consulted 2026-08-30.
   header decodes, the trace stays None; the ICD says only that such
   data is in an EdgeTech proprietary format.
 - **JSF writing**: this library reads JSF only.
+- **XTF packet types beyond the core six** (forward-look 4, Elac 5,
+  the Klein high-speed sensor and data pages, GPS/gyro/navigation
+  types 20-24 and 42/84/107, the QPS and Reson/R2Sonic vendor records,
+  custom type 199): the S10 tables define several of them, but none
+  appears in the validation sample, so they are skipped tolerantly and
+  counted by header type rather than shipped undecoded-but-guessed.
+  Contributions welcome with spec table citations and a real file.
+- **XTF sample format 1 (4-byte IBM float)**: named by S10 without a
+  bit layout, so those channels keep raw bytes only.
+- **XTF vendor bathymetry payloads** (types 2 and 19 fragments): the
+  spec's own instruction is to consult the sonar manufacturer; the
+  payloads are carried verbatim.
+- **XTF writing**: this library reads XTF only.
