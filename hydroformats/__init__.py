@@ -14,6 +14,7 @@ Supported dialects:
   :func:`load_sidescan` because the SVLog loader claimed the
   ``load_survey`` name first
 - Teledyne RESON s7k (SeaBat 7k multibeam logging): :func:`read_s7k`
+- Kongsberg KMALL (EM series multibeam logging): :func:`read_kmall`
 
 Most callers want :func:`open_session`, which sniffs the dialect, resolves
 the device registry from the header, and streams typed records::
@@ -31,6 +32,9 @@ file into working series: :func:`load_survey` (SVLog), :func:`load_swath`
 SVLog claimed the package-level name first), and :func:`load_s7k` (s7k;
 inside :mod:`hydroformats.s7k` it is named ``load_swath``, aliased here
 because GSF claimed that package-level name first).
+SVLog claimed the package-level name first), and :func:`load_kmall`
+(KMALL; inside :mod:`hydroformats.kmall` it is named ``load_swath``,
+aliased here because GSF claimed that package-level name first).
 
 Every record class documents the source anchoring its field layout; see
 ``docs/FORMAT-SOURCES.md``. Unanchored record types parse as
@@ -44,6 +48,8 @@ from .hs2x import parse_hs2x
 from .hsx import parse_hsx
 from .jsf import load_survey as load_jsf
 from .jsf import read_jsf
+from .kmall import load_swath as load_kmall
+from .kmall import read_kmall
 from .raw import parse_raw
 from .s7k import load_swath as load_s7k
 from .s7k import read_s7k
@@ -65,6 +71,7 @@ __all__ = [
     "load_jsf",
     "load_sidescan",
     "load_s7k",
+    "load_kmall",
     "load_survey",
     "load_swath",
     "open_session",
@@ -75,6 +82,7 @@ __all__ = [
     "read_gsf",
     "read_jsf",
     "read_s7k",
+    "read_kmall",
     "read_svlog",
     "read_xtf",
     "records",

@@ -41,6 +41,41 @@
   surfaced a stale-checksum writer quirk on 7610 records and a
   checksum-flag bit numbering contradiction inside the DFD itself
   (both recorded as anchor errata).
+- Kongsberg KMALL read-only dialect (the current-generation datagram
+  format of the EM series multibeam echosounders, successor of .all):
+  datagram walker with trailing-length-word verification and forward
+  resynchronization on the '#' type code (`iter_datagrams`), typed
+  records (`read_kmall`) for #MRZ multibeam pings (the full ping info
+  block including position, sound speed and mode words, per-sector
+  transmit blocks, receiver info, and per-beam soundings preserving
+  the raw observables: two way travel time and beam angle beside the
+  processed x/y/z, detection type/method/quality, both reflectivity
+  values with the applied source level, receiver sensitivity,
+  calibration and TVG, and the seabed image samples split per beam),
+  #SKM attitude blocks (full KM binary samples with delayed heave),
+  #SPO/#CPO positions (corrected values plus the raw sensor telegram),
+  #SVP sound velocity or CTD casts, #IIP/#IOP installation and runtime
+  parameter text blobs, and #CHE compatibility heave. #MWC water
+  column datagrams decode header-only by design (identified, timed,
+  tied to their ping, byte size recorded; the sample payload is
+  deliberately skipped). Partitioned #MRZ datagrams (raw UDP logging;
+  SIS merges them) are rejoined per the spec's multibeam data logging
+  chapter, honoring the revision I change that put the common body in
+  every partition, with incomplete sets degrading to
+  `MalformedRecord`. Every variable block is walked by its own
+  declared byte size, so newer-revision extensions skip faithfully.
+  `hydroformats.kmall.load_swath` bundles pings, positions, attitude,
+  casts, parameter text and stream counters (unknown types counted by
+  code, end-length mismatches, skipped bytes, partition accounting);
+  it is exported at the package level as `load_kmall` because GSF
+  holds the package-level `load_swath` name. Clean-room spec anchor
+  S11 in docs/FORMAT-SOURCES.md (Kongsberg document 410224 revision J;
+  no third-party parser consulted); validated end to end against a
+  real NCEI-archived EM 304 line from NOAA Ship Okeanos Explorer
+  (every byte framed, zero malformed, every trailing length word
+  verified, the usable-sounding criterion reproducing the datagrams'
+  own valid counts exactly, and slant ranges recomputed from the raw
+  observables agreeing with the stored xyz to within refraction).
 
 - EdgeTech JSF read-only dialect (the native recording format of the
   Discover/JStar topsides, including the 6205 dual-frequency

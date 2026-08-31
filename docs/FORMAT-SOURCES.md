@@ -432,6 +432,71 @@ a 532-point 1010 profile carries a plausible sound speed cast.
 Neither dataset is distributed with this repository. Consulted
 2026-08-31.
 
+**S11: Kongsberg KMALL datagram specification.** The KMALL reader
+(`hydroformats/kmall.py`, records in `hydroformats/kmall_records.py`) is
+anchored to the format owner's own published specification:
+
+- *EM datagrams on \*.kmall format*, Kongsberg document 410224
+  revision J, date of issue 2023-09-15 (revision text J.02,
+  2025-08-20), published by Kongsberg Discovery as browsable
+  documentation generated from the format's own reference definition
+  (`EMdgmFormat.h`, `EM_DGM_FORMAT_VERSION "Rev J 2023-09-15"`).
+  <https://www.kongsbergdiscovery.online/sis/kmall/index.html>
+  (linked from Kongsberg Discovery's EM support pages at
+  <https://kongsbergdiscovery.net/em/>). MB-System's format document
+  mirror carries earlier revisions of the same document
+  (<https://www3.mbari.org/data/mbsystem/formatdoc/KongsbergKmall/EMdgmFormat_RevH/index.html>),
+  consulted for cross-checking revision H field text only. Consulted
+  2026-08-31.
+
+Clean-room note: no third-party KMALL parser code was consulted; every
+layout is hand-built from the specification's struct definitions and
+field documentation (general header EMdgmHeader_def; partition and
+common body EMdgmMpartition_def/EMdgmMbody_def with the multibeam data
+logging chapter's partition tables; #MRZ ping info, tx sector, rx
+info, extra detection class and sounding structs plus the seabed image
+organization section; #SKM info/KMbinary/KMdelayedHeave; #SVP;
+#SPO/#CPO common sensor part and data block; #IIP/#IOP; #CHE; #MWC
+sub-structs for the header-only decode). Byte order is little endian
+with 4-byte alignment per the specification's overview, pinned
+byte-for-byte in `tests/test_kmall.py`. Readings the document leaves
+open, and deliberate scope choices, are labelled as judgments in the
+module docstring: resynchronization on the '#' type code prefix (the
+format has no sync marker), version-dependent optional fields keyed on
+each block's own declared byte size, the delayed heave block read from
+the tail of each #SKM sample, and #MRZ partition part matching keyed
+on header time plus the common body's ping counter and fan identity
+(the spec defines the part layout and the rejoin, not the matching).
+
+Validation against real archived data: NOAA NCEI's multibeam archive
+publishes raw .kmall from current NOAA cruises. The file used here is
+`0002_20230906_100130_EX2306_MB.kmall.gz` from cruise EX2306 (NOAA
+Ship Okeanos Explorer, Kongsberg EM 304 serial 10016, Gulf of Alaska,
+2023-09-06; 106,231,030 bytes decompressed):
+<https://data.ngdc.noaa.gov/platforms/ocean/ships/okeanos_explorer/EX2306/multibeam/level_00/EX2306_RAW_EM304/0002_20230906_100130_EX2306_MB.kmall.gz>.
+The library frames **every byte with zero skipped bytes, zero
+malformed records and every trailing length word verified** (37,170
+datagrams: 494 #MRZ version 3 pings of 800 soundings and 8 transmit
+sectors in dual swath mode, 5,801 #SPO plus 5,801 #CPO positions,
+3,799 #SKM attitude blocks carrying 386,784 KM binary samples all with
+delayed heave, one 488-point SVP cast, one #IIP, two #IOP, and 21,271
+counted #SVT/#SCL/#FCF datagrams outside this reader's scope). The
+per-sounding usable criterion reproduces the datagrams' own
+numSoundingsValidMain sum exactly (394,665); the geometric slant range
+from each sounding's x, y, z agrees with half the sound speed times
+the two way travel time to within one percent (the residual being
+refraction), pinning the xyz, travel time and sound speed decodes
+against each other; the ping positions sit in the box the interleaved
+GGA telegrams independently pin; and the seabed image per-beam split
+covers the flat sample array exactly. The file's water column was
+logged to a separate .kmwcd file that NCEI does not archive, so the
+#MWC and #CHE decodes and the partition reassembly rest on the spec
+tables and synthetic fixtures. The file is fetched from NCEI directly
+and is **not** distributed with this repository; the statistics are
+pinned in `tests/test_kmall.py::test_real_sample_statistics` (run with
+`KMALL_SAMPLE=<path to the decompressed .kmall>`). Consulted
+2026-08-31.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -595,6 +660,16 @@ Neither dataset is distributed with this repository. Consulted
 | Water column 7018/7042 | s7k | S12 | Tables 63, 82: **headers decoded, sample payloads skipped** |
 | Sound velocity 7610 (size-detected temperature and pressure) | s7k | S12 | Table 117 |
 | s7k 1005-1017 sensor family (incl. PDS 1015/1016), 7001-7022, 7030-7059, 7200, 7300, 7500-7511, 7504 | s7k | S12 (existence) | **skipped, counted by type** |
+| 20-byte general header, '#' type codes, trailing length word | KMALL | S11 | little endian, 4-byte alignment |
+| #MRZ: partition, common body, ping info, tx sectors, rx info, soundings, seabed image | KMALL | S11 | blocks walked by declared sizes |
+| #MRZ partition split and rejoin (common body per part from v3) | KMALL | S11 | multibeam data logging chapter |
+| #SKM info, KMbinary sample, delayed heave | KMALL | S11 | delayed heave from sample tail |
+| #SVP common part and points (voided absorption word skipped) | KMALL | S11 | S00/S01 formats |
+| #SPO/#CPO common sensor part, data block, raw telegram text | KMALL | S11 | unavailable sentinels matched exactly |
+| #IIP/#IOP parameter text blobs | KMALL | S11 | verbatim; keys deferred to separate docs |
+| #CHE common body + heave | KMALL | S11 | heave re transducer, positive down |
+| #MWC header, partition, common body | KMALL | S11 | **samples deliberately not decoded** |
+| #SVT, #SCL, #SDE, #SHI, #SPE, #SPD, #IBE/#IBR/#IBS, #FCF | KMALL | S11 (existence) | **skipped, counted by type** |
 
 ## Deliberately not implemented
 
@@ -689,3 +764,19 @@ Neither dataset is distributed with this repository. Consulted
   are defined "always zero" by S12 and are zero in every sample; a
   nonzero fragment would frame but is not reassembled.
 - **s7k writing**: this library reads s7k only.
+- **KMALL water column samples** (#MWC beam data, and .kmwcd files
+  beyond their shared framing): the per-beam amplitude and phase
+  series are routinely gigabytes per survey and outside the swath
+  observables this library targets; #MWC decodes header-only (general
+  header, partition, common body) with the byte size recorded, and the
+  sample payload is deliberately skipped. Contributions welcome with
+  spec struct citations.
+- **KMALL sensor datagrams without a decoding need here** (#SVT sound
+  velocity at transducer, #SCL clock, #SDE depth, #SHI height, #SPE
+  position error, #SPD datum, the #IBE/#IBR/#IBS built-in-test family,
+  #FCF backscatter calibration file): defined by S11 but outside the
+  core swath observables; skipped tolerantly and counted by type code.
+- **KMALL #IIP/#IOP parameter keys**: the spec defers their meanings
+  to separate installation and runtime parameter documents, so the
+  text blobs are carried verbatim, never interpreted.
+- **KMALL writing**: this library reads KMALL only.
