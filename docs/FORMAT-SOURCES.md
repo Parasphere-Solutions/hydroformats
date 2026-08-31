@@ -497,6 +497,93 @@ pinned in `tests/test_kmall.py::test_real_sample_statistics` (run with
 `KMALL_SAMPLE=<path to the decompressed .kmall>`). Consulted
 2026-08-31.
 
+**S13: Blueprint Oculus, permissive open source plus real captures.**
+The Oculus reader (`hydroformats/oculus.py`, records in
+`hydroformats/oculus_records.py`) covers the ViewPoint V1 `.oculus`
+log container and the raw SimplePingResult message stream of the
+Oculus multibeam imaging sonars (M370s/M750d/M1200d/M3000d).
+
+Clean-room note: Blueprint publishes no ICD (their 17 MB user guide is
+an operations manual with zero format content), the Oculus SDK is
+"available on request" only with no discoverable license terms, and
+every copy of the vendor's own `Oculus.h` on public hosts carries a
+GPL-3.0-or-later notice (the "Oculus Viewer" header), so it was
+**deliberately not consulted**, nor was any other GPL-headed or
+unlicensed code (takyonxxx/OculusSonar, MarineRoboticsGroup and
+GSO-soslab sonar_oculus, tidewise, ohad-i, and the GPL-headed files
+inside the ENSTA repository, among others). Every layout is anchored
+to four license-verified permissive sources, cross-checked against
+each other and byte-verified on real captures:
+
+- **liboculus**, University of Washington APL, BSD-3-Clause,
+  <https://github.com/apl-ocean-engineering/liboculus> (commit
+  `8151f57`): the bearing table semantics (one int16 per beam in
+  hundredths of a degree, packed immediately after the ping struct),
+  the rule that the image is sliced at the message's own imageOffset,
+  the gain-row prefix rule (flags bit 2: each range row starts with a
+  4-byte gain word), the DataSizeType names and widths, master mode
+  semantics (1 low frequency, 2 high), the fire flag bit meanings
+  (Constants.h: bit 0 range in meters, bit 1 16-bit data, bit 2 send
+  gain, bit 3 simple return, bit 4 gain assistance, bit 6 512 beams),
+  and the recorded test captures validated below.
+- **ENSTA Bretagne oculus_driver**, repository BSD-3-Clause,
+  <https://github.com/ENSTABretagneRobotics/oculus_driver> (commit
+  `ad3a7d7`), restricted to the files carrying no per-file GPL
+  notice: `Recorder.h`/`Recorder.cpp` (the log container: file header
+  magic 0x11223344 with source text, version, encryption words, key
+  and epoch-seconds double; item header magic 0xAABBCCDD with type,
+  version, time, compression and size words; the record type enum
+  including the ENSTA-only type 1010 stamp) and the pybind bindings
+  (field names and order).
+- **niwa/ESP3**, MIT, <https://github.com/niwa/ESP3> (commit
+  `be39449`), `oculus_read_functions.m`: the message type ids (0x15
+  simple fire, 0x22 ping result, 0x23 simple ping result, 0x55 user
+  config, 0xFF dummy), the version 1 and 2 ping field types in
+  declaration order, and an independent container read that
+  cross-checks the ENSTA structs.
+- **oculus-python** 0.0.2a1, Apache-2.0 (PyPI, F. Thompson):
+  the packed struct format strings with the container headers'
+  alignment padding made explicit, the version 2 fire and ping
+  layouts, and the description of ViewPoint V2 logs as SQLite
+  databases (which this library recognizes and refuses by name).
+
+Validation against real data (statistics pinned in
+`tests/test_oculus.py`, run with `OCULUS_SAMPLE=<path to
+Oculus_20210916_105445.oculus>` and `OCULUS_RAW_SAMPLE=<path to
+three_pings_8bit.raw>`; the container sample is CC0 and stored under
+reference-data locally, the raw capture ships in the BSD liboculus
+repository):
+
+- **Container, version 2 pings**: two files from the CC0 (public
+  domain) survey of Parnum et al. 2024, Curtin University CMST
+  (<https://zenodo.org/records/10830407>, Dryad
+  doi:10.5061/dryad.dfn2z358w; 66 ViewPoint `.oculus` files from an
+  SRV-8 ROV in a freshwater pool, 2021-09-16). The pinned file
+  (14,734,024 bytes) frames **every byte with zero gaps and zero
+  malformed records**: 151 uncompressed type 10 items, each one
+  version 2 simple ping result from the same dual-frequency unit
+  (srcDeviceId 19125) at 1.197 MHz, ping ids 6629 through 6779
+  without a gap, 373 range lines by 256 beams at 20.085 mm resolution
+  (reproducing the 7.5 m range demand to 0.11 percent), monotonic
+  bearing tables spanning exactly 130 degrees, plausible pool
+  temperature (26.65 to 26.75 C) and near-surface pressure, the
+  demanded sound speed equal to the applied one, and the sonar's
+  seconds-since-power-up clock ticking at the same 15 Hz as the item
+  headers' epoch timestamps (which pins both clocks against each
+  other). A second file from the same unit at 749 kHz (4 pings)
+  cross-checks the low-frequency mode.
+- **Raw stream, version 1 pings**: liboculus's committed
+  `three_pings_8bit.raw` (546,048 bytes, BSD-3-Clause). Three
+  consecutive simple ping results walk byte-exactly: ping ids 415323
+  through 415325, 2.099 MHz, 703 range lines by 256 beams at
+  2.842 mm resolution reproducing the 2.0 m demand, bearings spanning
+  exactly 60 degrees, the applied sound speed equal to the fire
+  echo's 1490.66 m/s, and every size word mutually consistent
+  (imageOffset plus imageSize equals messageSize equals 16 plus the
+  header's payloadSize, and rows times beams equals imageSize).
+
+Consulted 2026-08-31.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -591,6 +678,47 @@ pinned in `tests/test_kmall.py::test_real_sample_statistics` (run with
   pair is populated (ship stays 0.0) even though layback is zero.
   Which position (and whether to swing layback) georeferences the
   imagery is left to the consumer, per the module docstring.
+- **Real Oculus version 1 messages stamp msgVersion 0, not 1.** Every
+  ping in the S13 raw capture carries msgVersion 0 with the version 1
+  layout; the S13 oculus-python reader accepts only 1 or 2 and would
+  refuse the real bytes. The library keys the layout on "2 or not 2".
+- **The version 1 ping start word is not float seconds.** ESP3 reads
+  it as a 4-byte float of seconds since power-up; the S13 raw
+  capture's values decode to junk under that reading (-0.0001, -0.02,
+  -3.8 across three pings sharing one clock) but tick uniformly as an
+  unsigned counter (62,502,130 then 62,502,097 counts between
+  consecutive pings). The library carries the word verbatim
+  (`ping_start_word`) and interprets nothing. The version 2 double is
+  genuinely seconds (proven against the item timestamps).
+- **The version 1 temperature and pressure doubles can be garbage.**
+  In the S13 raw capture they hold a denormal-range speck and an
+  astronomically negative value; the same unit's fields elsewhere are
+  fine, so this is uninitialized hardware memory, not layout error.
+  The version 2 capture's values are physically plausible. Surfaced
+  verbatim; consumers should sanity-check before trusting them.
+- **Unset fire bytes carry fill patterns, not zeros.** The demanded
+  rate and network speed bytes hold 0xC3/0x19 in the S13 raw capture
+  and 0xA5/0xA5 in the ViewPoint files, and the version 2 reserved
+  and spare words hold 0xA5 fill: none of them may be interpreted or
+  compared to enum values (the rate enum's numeric values are also
+  only published in GPL text, so the library never maps that byte).
+- **The bytes between the bearing table and imageOffset are filler,
+  and not zero.** Both S13 captures put the image at offset 2048 with
+  about 1.4 kB of nonzero fill after the bearing table; a reader that
+  assumes the image follows the bearings reads garbage. The library
+  always slices at the message's own imageOffset (the S13 BSD sources
+  do the same).
+- **The item header is 40 bytes on disk, not the 36 a field list
+  suggests.** Natural alignment pads the struct's tail; real files
+  declare 40 in the header's own size field (48 for the file header).
+  The library honors the declared sizes, so grown headers skip
+  cleanly.
+- **Bearing tables ignore datasheet apertures.** The S13 ViewPoint
+  unit spans exactly 130 degrees at both 749 kHz and 1.197 MHz, where
+  vendor literature quotes a narrower high-frequency fan; the raw
+  capture's unit spans 60 degrees at 2.099 MHz. The per-ping bearing
+  table is the only trustworthy geometry, and the library treats
+  aperture as data, never a model constant.
 
 ## Record-by-record anchoring
 
@@ -670,6 +798,14 @@ pinned in `tests/test_kmall.py::test_real_sample_statistics` (run with
 | #CHE common body + heave | KMALL | S11 | heave re transducer, positive down |
 | #MWC header, partition, common body | KMALL | S11 | **samples deliberately not decoded** |
 | #SVT, #SCL, #SDE, #SHI, #SPE, #SPD, #IBE/#IBR/#IBS, #FCF | KMALL | S11 (existence) | **skipped, counted by type** |
+| 48-byte file header (magic 0x11223344, source, encryption, epoch double) | OCULUS | S13 | declared size honored |
+| 40-byte item header (magic 0xAABBCCDD), resync on the magic | OCULUS | S13 | see errata on the 36-byte reading |
+| 16-byte message header (magic 0x4F53, "SO" on the wire) | OCULUS | S13 | msgVersion 2-or-not keys the layout |
+| SimplePingResult v1 (122-byte struct) and v2 (202-byte) | OCULUS | S13 | both byte-verified on real captures |
+| Bearing table (int16 hundredths of a degree), image at imageOffset | OCULUS | S13 | filler between them never read |
+| Gain-row split (flags bit 2, 4-byte row prefixes) | OCULUS | S13 | lattice must match exactly, else refused |
+| Item types 1-2, 11-26, 30, 500, 1010 | OCULUS | S13 (existence) | **skipped, counted by type** |
+| Message ids 0x15, 0x22, 0x55, 0xFF | OCULUS | S13 (existence) | **skipped, counted by id** |
 
 ## Deliberately not implemented
 
@@ -780,3 +916,27 @@ pinned in `tests/test_kmall.py::test_real_sample_statistics` (run with
   to separate installation and runtime parameter documents, so the
   text blobs are carried verbatim, never interpreted.
 - **KMALL writing**: this library reads KMALL only.
+- **ViewPoint V2 logs** (SQLite databases, also using the `.oculus`
+  extension): Blueprint states they are not backward compatible with
+  the V1 container, the schema is only thinly described by S13's
+  Apache source, and no sample is in hand, so they are recognized by
+  the SQLite magic and refused loudly by name, never guessed at.
+- **Compressed Oculus item payloads** (compression word 1, a Qt
+  qCompress/zlib wrapper per S13): no capture with compression is in
+  hand, so such items are skipped and counted, not decoded.
+- **Encrypted Oculus logs** (nonzero file-header encryption word):
+  the header decodes, then the walk refuses loudly; nothing here
+  decrypts.
+- **Oculus non-sonar item payloads** (settings 1, serial 2, the AP
+  and video family 11 through 26, SBG 30, view info 500, and ENSTA's
+  type 1010 seconds/nanoseconds stamp): outside the imaging
+  observables this library targets; skipped tolerantly and counted by
+  type, contributions welcome with source citations.
+- **Oculus full return message** (id 0x22, messagePingResult): the
+  MIT S13 source partially decodes it, but no capture is in hand and
+  the simple ping result carries the observables this library
+  targets; skipped tolerantly and counted by id.
+- **Oculus demanded-rate enum mapping**: the enum's numeric values
+  appear only in GPL text, and real captures put fill bytes in the
+  field anyway (anchor errata), so the byte is carried raw.
+- **Oculus writing**: this library reads Oculus logs only.

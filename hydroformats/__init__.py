@@ -15,6 +15,11 @@ Supported dialects:
   ``load_survey`` name first
 - Teledyne RESON s7k (SeaBat 7k multibeam logging): :func:`read_s7k`
 - Kongsberg KMALL (EM series multibeam logging): :func:`read_kmall`
+- Blueprint Oculus (.oculus ViewPoint imaging sonar logs):
+  :func:`read_oculus` (and :func:`read_oculus_raw` for bare message
+  streams); the bundle loader is :func:`hydroformats.oculus.load_imaging`,
+  exported here as :func:`load_oculus` because the DDF reader claimed
+  the ``load_imaging`` name first
 
 Most callers want :func:`open_session`, which sniffs the dialect, resolves
 the device registry from the header, and streams typed records::
@@ -50,6 +55,8 @@ from .jsf import load_survey as load_jsf
 from .jsf import read_jsf
 from .kmall import load_swath as load_kmall
 from .kmall import read_kmall
+from .oculus import load_imaging as load_oculus
+from .oculus import read_oculus, read_oculus_raw
 from .raw import parse_raw
 from .s7k import load_swath as load_s7k
 from .s7k import read_s7k
@@ -69,6 +76,7 @@ __all__ = [
     "beam_count_for_ping_mode",
     "load_imaging",
     "load_jsf",
+    "load_oculus",
     "load_sidescan",
     "load_s7k",
     "load_kmall",
@@ -81,6 +89,8 @@ __all__ = [
     "read_aris",
     "read_gsf",
     "read_jsf",
+    "read_oculus",
+    "read_oculus_raw",
     "read_s7k",
     "read_kmall",
     "read_svlog",

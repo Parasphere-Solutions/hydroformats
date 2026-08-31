@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+- Blueprint Oculus read-only dialect (the ViewPoint `.oculus` V1 log
+  container and the raw SimplePingResult stream of the M370s/M750d/
+  M1200d/M3000d multibeam imaging sonars): magic-verified item walker
+  honoring the headers' own declared sizes, with forward
+  resynchronization on the item magic (`iter_items`), and typed
+  records (`read_oculus`; `read_oculus_raw` for bare message streams
+  such as the liboculus captures) for simple ping results in both
+  message versions, keyed on "msgVersion 2 or not" because real
+  version 1 hardware stamps 0. Each `OculusPing` carries the fire
+  settings (mode, flags with decoded bit properties, range demand
+  with its meters-or-percent flag, gain, sound speed, salinity), the
+  sonar's report (frequency, temperature, pressure, applied sound
+  speed, version 2 heading/pitch/roll, both versions' clocks: the
+  epoch-seconds item timestamp, the version 2 seconds-since-power-up
+  double, and the version 1 start word verbatim), the image geometry
+  (range lines, beams, sample size from the DataSizeType word, range
+  resolution and the derived imaged range), the per-ping bearing
+  table in hundredths of a degree with degree and aperture accessors
+  (aperture is data, never a model table), per-row gain words split
+  out when flags bit 2 sent them, and the raw samples with row and
+  beam accessors. The image is always sliced at the message's own
+  imageOffset (real files pad nonzero filler after the bearing
+  table). `hydroformats.oculus.load_imaging` bundles the file header,
+  ping series and stream counters (skipped item types and unknown
+  message ids counted by value, compressed items, malformed count,
+  skipped bytes); it is exported at the package level as
+  `load_oculus` because DDF holds the package-level `load_imaging`
+  name. ViewPoint V2 SQLite logs and encrypted logs are refused
+  loudly by name; compressed items and non-sonar item types skip
+  tolerantly; truncation degrades to `MalformedRecord`, never
+  exceptions. Clean-room anchor S13 in docs/FORMAT-SOURCES.md
+  (license-verified permissive sources only: BSD liboculus, the BSD
+  files of ENSTA's oculus_driver, MIT ESP3, Apache oculus-python;
+  Blueprint's GPL Oculus.h deliberately not consulted, no public ICD
+  exists); byte-verified end to end against a CC0 ViewPoint survey
+  (151 version 2 pings framing with zero gaps, both clocks pinned
+  against each other, the range demand reproduced from resolution
+  times range lines) and liboculus's BSD version 1 captures, which
+  together surfaced seven errata (msgVersion 0 on real version 1
+  hardware, a float-seconds misreading of the version 1 start word,
+  garbage temperature/pressure doubles, fill patterns in unset fire
+  bytes, nonzero filler before imageOffset, the 36-versus-40-byte
+  item header, and bearing tables that ignore datasheet apertures).
 - Teledyne RESON s7k read-only dialect (the native logging of the
   SeaBat 7k sonar generation and a major survey-industry interchange
   format): sync-verified Data Record Frame walker with forward
