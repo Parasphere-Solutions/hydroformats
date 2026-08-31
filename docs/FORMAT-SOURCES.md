@@ -359,6 +359,79 @@ survey story. The statistics are pinned in
 `tests/test_xtf.py::test_real_sample_statistics` (run with
 `XTF_SAMPLE=<path to Demoplane.xtf>`). Consulted 2026-08-30.
 
+**S12: Teledyne RESON 7k Data Format Definition.** The s7k reader
+(`hydroformats/s7k.py`, records in `hydroformats/s7k_records.py`) is
+anchored to the format owner's own protocol description:
+
+- *7k Data Format*, Teledyne RESON Data Format Definition,
+  Version 3.10, April 3, 2019.
+  Public copy, provided by Teledyne to the MB-System documentation
+  archive:
+  <https://www3.mbari.org/data/mbsystem/formatdoc/Teledyne7k/7k_DFD_3.10_package/DFD_7k_Version_3.10.pdf>
+  (Teledyne Marine distributes the DFD from teledynemarine.com; the
+  MBARI format-documentation page hosts vendor-permitted copies,
+  Version 3.10 the newest). Consulted 2026-08-31.
+
+Clean-room note: no third-party s7k parser code was consulted; every
+layout is hand-built from the document's tables (Data Record Frame
+Table 5 with the 7KTIME structure of Table 3 and the sign and unit
+conventions of Table 2; position Table 14; CTD Tables 24-25; geodesy
+Table 26; roll/pitch/heave and heading Tables 27-28; sonar settings
+Table 39; beam geometry Tables 44-45; bathymetric data Tables 46-47;
+beamformed data header Table 63; raw detection data Tables 71-73 with
+Appendix F's sample-number-to-travel-time rule; snippet data
+Tables 74-75; compressed water column header Table 82; snippet
+backscattering strength Tables 100-101; remote control sonar settings
+Table 113; sound velocity Table 117). Byte order is little endian
+throughout per the document's section 2.4, pinned byte-for-byte in
+`tests/test_s7k.py`. Readings the document leaves open are labelled as
+judgments in the module docstring:
+
+- The trailing checksum word is read as always present (the size field
+  is defined "to the end of the checksum field" unconditionally) and
+  verified only when DRF flags bit 0 is set; see the errata below on
+  the document's own bit numbering.
+- Frames whose header offset field is below 60 degrade to gaps: the
+  version 5 DRF (the only protocol version in use per Table 4) needs
+  its 64-byte fixed part.
+- Records are decoded through the record size per the DFD's
+  backwards-compatibility rule (new fields append at the end): longer
+  payloads ride along undecoded, shorter vintages surface the older
+  layout with the absent trailing fields as None. The rule is proven
+  on real data twice over: the 2009 sample below writes 22-byte 7027
+  detection blocks (no intensity yet) and 36-byte 1003 records
+  (without the one field Table 14 itself marks optional), the 2017
+  sample 26-byte blocks (intensity, no gate limits).
+- The zero-length snippet window convention (begin sample greater than
+  end sample, length = end - begin + 1), stated by the DFD for record
+  7058, is applied to record 7028's identical descriptors as well.
+
+Validation against real archived data: NOAA NCEI's multibeam archive
+publishes raw .s7k (MB-System format 88). The file pinned in
+`tests/test_s7k.py::test_real_sample_statistics` (run with
+`S7K_SAMPLE=<path to the decompressed .s7k>`) is `20170522_181322.s7k`
+from survey SP1701 (R/V Scott Petty, Reson SeaBat T50-P, Galveston Bay
+approaches, 2017-05-22; 425,864,523 bytes decompressed):
+<https://data.ngdc.noaa.gov/platforms/ocean/ships/scott_petty/SP1701/multibeam/data/version1/MB/t50-p/20170522_181322.s7k.mb88.gz>.
+The library frames **every byte with zero skipped bytes and zero
+malformed records** (120,287 records; a natively logged line: 7,957
+pings each carrying 7000 settings, 7004 beam geometry, 7027 raw
+detections, 7028 snippets and a 7503 settings snapshot, plus
+1003/1012/1013 navigation and motion series and 15,917 7610 surface
+sound velocity records). The 512-beam geometry spans -75 to +75
+degrees; 3,986,864 detections; every ping carries snippet windows
+(37.4 million 16-bit samples file-wide); the position series decodes
+into the Galveston Bay approaches; and reducing each ping's most
+vertical raw detection (two-way time x applied sound velocity, cosine
+of the receive angle) puts the bed 8.6-15.7 m down, a dredged
+shipping channel. Two 2009 SeaBat 7125 lines from NCEI survey
+BermudaCaves2009 (Endurance, PDS-logged) cross-check the older
+vintages: both frame end to end with zero gaps, zero checksum
+failures and zero malformed records, positions decode to Bermuda, and
+a 532-point 1010 profile carries a plausible sound speed cast.
+Neither dataset is distributed with this repository. Consulted
+2026-08-31.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
@@ -401,6 +474,24 @@ survey story. The statistics are pinned in
   decode formula itself checks out: at the header's 1457 m/s the first
   clip's code 4 gives a 1.667 m start and a 10.003 m window, consistent
   with a short-range HF fish-counting deployment.
+- **S12's checksum flag prose contradicts its own bit table.** The
+  DRF Flags field of Table 5 enumerates "Bit 0: Checksum, 0 invalid /
+  1 valid", but the Checksum field's description in the same table
+  says its use "depends on bit 1 of the Flags field". The library
+  reads bit 0, the reading the enumeration supports; on all three
+  real S12 samples the flags word is exactly 0x0001 and the byte sums
+  verify under it (7610 aside, next erratum).
+- **The S12 sample's 7610 records carry stale checksums.** In the
+  SP1701 T50-P line, 15,857 of the 15,917 record-7610 frames fail the
+  checksum: the stored word exceeds the byte sum by a small amount
+  that drifts smoothly along the 10 Hz series, as if the writer
+  checksummed the record before restamping a field. Every other
+  record type in the file (104,370 frames) verifies exactly, as does
+  every frame of the two 2009 PDS-logged samples, so the framing and
+  sum rule are right and this is a writer quirk of that vintage. The
+  reader reports it (`checksum_ok`, `counters.checksum_failures`) and
+  decodes the records anyway; the 7610 values themselves are a
+  coherent 1522-1526 m/s surface sound velocity series.
 - **S9's NMEA source byte enumeration is incomplete.** The ICD lists
   the type 2002 source values as 1 = Sonar, 2 = Discover, 3 = ETSI;
   every one of the 3,368 NMEA messages in the S9 sample (written by
@@ -493,6 +584,17 @@ survey story. The statistics are pinned in
 | XTFBATHHEADER 2 (vendor payload verbatim) | XTF | S10 | Figure 3: "logged raw" |
 | BATHY_SNIPPET 19: SNP0/SNP1 headers, raw fragments | XTF | S10 | Tables N, O |
 | Header types 4-18, 20-108, 199-200 | XTF | S10 (list only) | **skipped, counted by type** |
+| Data Record Frame (sync 0x0000FFFF, 7KTIME, byte-sum checksum) | s7k | S12 | Tables 3 and 5; resync on the sync pattern |
+| Position 1003 (geographic or grid, optional satellite count) | s7k | S12 | Table 14; short form proven on 2009 data |
+| CTD 1010, geodesy 1011, roll/pitch/heave 1012, heading 1013 | s7k | S12 | Tables 24-28 |
+| Sonar settings 7000, remote settings 7503 (append-tolerant tail) | s7k | S12 | Tables 39, 113 |
+| Beam geometry 7004 (size-detected transmit delays) | s7k | S12 | Tables 44-45 |
+| Bathymetric data 7006 (deprecated; optional gates) | s7k | S12 | Tables 46-47 |
+| Raw detections 7027 (block-size-gated fields, Appendix F reduction) | s7k | S12 | Tables 71-73; 22- and 26-byte vintages proven |
+| Snippets 7028, snippet backscatter 7058 (empty-window rule) | s7k | S12 | Tables 74-75, 100-101 |
+| Water column 7018/7042 | s7k | S12 | Tables 63, 82: **headers decoded, sample payloads skipped** |
+| Sound velocity 7610 (size-detected temperature and pressure) | s7k | S12 | Table 117 |
+| s7k 1005-1017 sensor family (incl. PDS 1015/1016), 7001-7022, 7030-7059, 7200, 7300, 7500-7511, 7504 | s7k | S12 (existence) | **skipped, counted by type** |
 
 ## Deliberately not implemented
 
@@ -569,3 +671,21 @@ survey story. The statistics are pinned in
   spec's own instruction is to consult the sonar manufacturer; the
   payloads are carried verbatim.
 - **XTF writing**: this library reads XTF only.
+- **s7k water column payloads** (7018 beamformed and 7042 compressed
+  sample matrices): the headers decode, the matrices are skipped by
+  design; water column data dwarfs everything else in a file and this
+  library targets the detection, snippet and navigation observables.
+- **s7k record types without a decoding need here**: the 7001
+  configuration XML, 7002 match filter, 7003 hardware pages, 7007
+  side scan, the deprecated 7008/7041 water column forms, 7010 TVG,
+  7012 ping motion, the 7021/7022 BITE family, 7030 installation
+  parameters, the 7200 file header and 7300 catalog, the 7500-7511
+  remote control records, and the Teledyne PDS 1015/1016
+  navigation/attitude pair (whose content the 1003/1012/1013 series
+  this library decodes also carries in natively logged files): all
+  defined by S12, skipped tolerantly and counted by type,
+  contributions welcome with table citations.
+- **s7k fragmented data record sets**: the DRF's fragmentation words
+  are defined "always zero" by S12 and are zero in every sample; a
+  nonzero fragment would frame but is not reassembled.
+- **s7k writing**: this library reads s7k only.

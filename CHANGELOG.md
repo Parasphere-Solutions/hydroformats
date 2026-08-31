@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- Teledyne RESON s7k read-only dialect (the native logging of the
+  SeaBat 7k sonar generation and a major survey-industry interchange
+  format): sync-verified Data Record Frame walker with forward
+  resynchronization on the 0x0000FFFF pattern, 7KTIME timestamps,
+  optional-data splitting and reported-never-raised byte-sum checksum
+  verification (`iter_records`), typed records (`read_s7k`) for
+  position (1003, geographic or grid, the optional satellite count
+  size-detected), CTD/SVP casts (1010), geodesy (1011),
+  roll/pitch/heave and heading (1012/1013), per-ping sonar settings
+  (7000) and the remote-control settings snapshot (7503, with an
+  append-tolerant tail), receive beam geometry (7004, transmit delays
+  size-detected), the deprecated bathymetry record (7006), raw
+  detection data (7027: per-detection beam number, fractional sample
+  number, receive steering angle, flags, quality, and the
+  block-size-gated uncertainty/intensity/gate fields, plus the
+  Appendix F sample-to-travel-time reduction as a property), snippet
+  imagery (7028, raw 16/32-bit intensity windows with the empty-window
+  rule) and snippet backscattering strength (7058, dB samples with
+  optional footprint areas), surface sound velocity (7610,
+  temperature and pressure size-detected), and the 7018/7042 water
+  column records as decoded headers with their sample matrices
+  deliberately skipped. `hydroformats.s7k.load_swath` matches each
+  ping's settings, detections, snippets and backscatter together
+  (keyed by device, enumerator, ping and multi-ping sequence) beside
+  the navigation, motion, sound velocity and geometry series, with
+  stream counters (unknown types counted by id, checksum failures,
+  skipped bytes); it is exported at the package level as `load_s7k`
+  because GSF holds the package-level `load_swath` name. Unknown
+  record types skip tolerantly; truncation degrades to
+  `MalformedRecord`, never exceptions. Clean-room DFD anchor S12 in
+  docs/FORMAT-SOURCES.md (Teledyne 7k Data Format Version 3.10; no
+  third-party parser consulted); validated end to end against a real
+  NCEI-archived SeaBat T50-P line (every byte framed, zero malformed,
+  512-beam pings with snippets, navigation into Galveston Bay, raw
+  observables reducing to channel depths) and two 2009 PDS-logged
+  SeaBat 7125 lines exercising the older record vintages, which also
+  surfaced a stale-checksum writer quirk on 7610 records and a
+  checksum-flag bit numbering contradiction inside the DFD itself
+  (both recorded as anchor errata).
+
 - EdgeTech JSF read-only dialect (the native recording format of the
   Discover/JStar topsides, including the 6205 dual-frequency
   bathymetric side scan): marker-verified message walker with forward
