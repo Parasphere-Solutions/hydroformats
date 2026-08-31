@@ -45,6 +45,38 @@
   garbage temperature/pressure doubles, fill patterns in unset fire
   bytes, nonzero filler before imageOffset, the 36-versus-40-byte
   item header, and bearing tables that ignore datasheet apertures).
+- Klein SDF read-only dialect (the native SonarPro recording of the
+  Klein side scan families: System 3000 and the 3900/NGS series,
+  System 5000, System 7000 and the 3500 series): marker-verified page
+  walker with forward resynchronization on the 0xFFFFFFFF ping marker
+  (`iter_pages`), typed records (`read_klein`) decoding the shared
+  page header for every family (time with float fractional seconds,
+  towfish and ship navigation in radians with degree properties,
+  heading/pitch/roll, depth, altitude, temperature, range, the three
+  differently-united speed fields, TVG, sample frequency, tow
+  geometry, and the version 4 extension: SBP settings, wing angle,
+  layback position, TPU version and capability words, with absent
+  fields None on version 3 pages) plus the count-prefixed channel
+  arrays in typedef order (System 3000 port/stbd LF/HF side scan and
+  the sub-bottom channel with its 4-byte count exception; the full
+  84-array System 5000 structure; 3500-series port/starboard 32-bit
+  pages with the center frequency word), decoded lazily with raw
+  sample bytes carried verbatim. System 7000 pages decode header-only
+  with the data region verbatim (the spec's own wording: "tentatively
+  defined"). `hydroformats.klein.load_survey` bundles pings, System
+  7000 pages and stream counters (unknown page versions counted,
+  malformed pages counted, bytes skipped), with per-channel regrouping
+  via `channel_series()`; it is exported at the package level as
+  `load_klein` because SVLog holds the package-level `load_survey`
+  name. Unknown page versions skip tolerantly; truncation and
+  overrunning counts degrade to `MalformedRecord`, never exceptions.
+  Clean-room anchor S13 in docs/FORMAT-SOURCES.md (the L-3 Klein SDF
+  data page specification Rev 2.05 and the SonarPro UDP companion
+  spec, with 3500-series specifics from OceanScan's MIT-licensed
+  reference reader; GPL and copyleft parsers never opened), including
+  three anchor errata found inside the vendor documents (the version 3
+  SBP signedness contradiction, the wingAngle float/U32 conflict, and
+  the UDP network-byte-order trap).
 - Teledyne RESON s7k read-only dialect (the native logging of the
   SeaBat 7k sonar generation and a major survey-industry interchange
   format): sync-verified Data Record Frame walker with forward

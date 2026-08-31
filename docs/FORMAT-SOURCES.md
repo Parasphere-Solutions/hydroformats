@@ -583,6 +583,80 @@ repository):
   header's payloadSize, and rows times beams equals imageSize).
 
 Consulted 2026-08-31.
+**S13: Klein SDF data page specification.** The Klein SDF reader
+(`hydroformats/klein.py`, records in `hydroformats/klein_records.py`)
+is anchored to the format owner's own published page definitions plus
+one MIT-licensed reference reader:
+
+- *SDF Data Page Definitions Specification*, L-3 Communications Klein
+  Associates, Inc., document 15300018 **Rev 2.05**, 15 April 2008:
+  the page version catalog (Table 1: 3000/3001 System 3000, 5000/5001
+  System 5000, 7000/7001 System 7000, header version 3 = 256 bytes,
+  4 = 512), the complete header typedef (every field name and type;
+  offsets computed from the packed struct land exactly on the
+  documented 44/64/128-word boundaries with all doubles 8-aligned),
+  the channel data structures for each system (count-prefixed arrays,
+  the System 3000 SBP 4-byte-count exception), the configuration word
+  masks (Table 2) and the .sdf file form (section 3: pages
+  concatenated, each preceded by the 32-bit ping marker 0xFFFFFFFF).
+  Distributed by Klein from l-3klein.com; that site is gone, so the
+  copy used is the Internet Archive capture:
+  <https://web.archive.org/web/20090107000216/http://www.l-3klein.com/tech/sp11.3/SDF_data_page_defs.pdf>.
+  **Rev 2.03** (14 June 2007) cross-checks the revision history (the
+  reserved3 resize, the fields added at TPU 6.17/6.19/6.22):
+  <https://web.archive.org/web/20071027182007/http://l-3klein.com/tech/sp11.0/SDF%20data%20page%20defs.pdf>.
+  Consulted 2026-08-31.
+- *SonarPro User Datagram Protocol Interface Specification*, L-3
+  Klein, document 15300015 Rev 1.3, 21 April 2008: the same header
+  field by field with units and enums (Table 4: range in meters,
+  speeds in cm/s where the ship speed float is m/s, latitudes and
+  longitudes in radians, the error flag bits, the per-channel
+  configuration masks of Tables 5-6, the txWaveform codes of
+  Tables 9-10, the responder table 11, despeckle table 12, raw data
+  config table 13).
+  <https://web.archive.org/web/20090106070500/http://www.l-3klein.com/tech/sp11.3/SonarPro_UDP_Software_Interface_Specification.pdf>.
+  Consulted 2026-08-31.
+- `sdf_reader.m` from **octave-sss**, OceanScan - Marine Systems &
+  Technology, Lda., **MIT license** (COPYING verified before any
+  source file was read; copyright line "Copyright (c) 2017 OceanScan -
+  Marine Systems & Technology, Lda."), commit `7d4dc43`:
+  <https://github.com/oceanscan/octave-sss/blob/7d4dc437b013cebac1d1b1bda3d134730a97823f/sdf_reader.m>.
+  A reference reader written against the newer, non-public
+  "SDF/SDFX Data Page Definitions Specification Rev 4.8": the anchor
+  for the 3500-series page versions 3501/3502 (4-byte sample counts,
+  unsigned 32-bit samples, port then starboard; vehicle nav routed
+  into the ship and aux header slots; the center frequency word in
+  kilohertz at byte 404, inside what Rev 2.05 still calls reserved3),
+  for the on-disk little-endian byte order (which no located Klein
+  document states), and for the numberBytes-excludes-the-marker walk
+  arithmetic. Consulted 2026-08-31.
+- Klein Series 3900 operations manual (doc 11214510 Rev 02,
+  Appendix B) confirms the 3900 logs System 3000 family pages
+  (HEADERVERSION selects page version 3000 or 3001), and the SonarPro
+  14 user manual (doc 11210093 Rev 01, chapters 20 and 30) supplies
+  recording and TPU clock context. Both from archived
+  kleinmarinesystems.com. Consulted 2026-08-31.
+
+Clean-room note: MB-System's Klein code is GPL and was **never
+opened**; the LSTS Neptus and DUNE repositories (Modified EUPL,
+copyleft) and an unlicensed MOOS SDF utility repository were
+identified and **skipped without reading any source file**. Every
+layout here is hand-built from the documents above. Readings the
+documents leave open are labelled as judgments in the module
+docstring: the little-endian disk order (reference reader plus real
+bytes; the UDP spec's network-byte-order broadcast of the same header
+is a documented trap, not copied), the System 3000 SBP 4-byte count
+applied to both header versions (the spec states the exception
+unconditionally), the version 3 SBP samples read signed (typedef and
+revision history versus the prose, next section), wingAngle read as
+the typedef's float (the UDP table prints U32), per-channel count
+prefixes trusted over the header's numSamples (chirp waveforms add
+numSamplesExtra), and marker-less raw TPU captures out of scope. No
+public SDFX byte-level documentation exists anywhere we could find
+(the Rev 4.8+ SDF/SDFX document ships with SonarPro and is not on the
+public web); later-revision additions inside the 2008 reserved region
+are decoded only where the MIT reader proves them (the 3500 frequency
+word), and unrecognized page versions are counted, never guessed.
 
 ## Anchor errata
 
@@ -720,6 +794,23 @@ Consulted 2026-08-31.
   table is the only trustworthy geometry, and the library treats
   aperture as data, never a model constant.
 
+- **S13's version 3 SBP typedef contradicts its own prose.** The
+  System 3000 version 3 structure declares `short sbp[]` and the
+  revision history records the deliberate change ("Changed System
+  3000 SBP to short from unsigned short", Rev 1.01), yet the sentence
+  under the same typedef still says "Each of the data channel samples
+  is a 16-bit unsigned quantity". The library follows the typedef:
+  SBP samples decode signed, side scan unsigned.
+- **S13's wingAngle type differs between its two documents.** The SDF
+  typedef declares `float wingAngle`; the UDP companion's field table
+  prints U32 for the same word. The library reads the typedef's
+  float.
+- **S13's UDP byte order does not apply on disk.** The UDP spec
+  converts the header to network byte order (big endian) before
+  broadcast; SDF files are little endian per the MIT reference reader
+  and real bytes. A reader built from the UDP document's wire dumps
+  would decode every word backwards.
+
 ## Record-by-record anchoring
 
 | Record | Dialect | Anchor | Note |
@@ -788,6 +879,13 @@ Consulted 2026-08-31.
 | Water column 7018/7042 | s7k | S12 | Tables 63, 82: **headers decoded, sample payloads skipped** |
 | Sound velocity 7610 (size-detected temperature and pressure) | s7k | S12 | Table 117 |
 | s7k 1005-1017 sensor family (incl. PDS 1015/1016), 7001-7022, 7030-7059, 7200, 7300, 7500-7511, 7504 | s7k | S12 (existence) | **skipped, counted by type** |
+| Page framing (0xFFFFFFFF marker, numberBytes, resync on marker) | SDF | S13 | marker excluded from numberBytes |
+| Page header: base 44 words, v3 to 256 B, v4 to 512 B | SDF | S13 | offsets computed from the packed typedef |
+| Header units and enums (radians, cm/s vs m/s, masks, waveforms) | SDF | S13 (UDP doc) | see anchor errata on byte order |
+| System 3000 channels (port/stbd LF/HF u16, SBP 4-byte count) | SDF | S13 | v3 SBP signed per errata; v4 SBP s32 |
+| System 5000 channels (chan1-10, bathy I/Q, sensors, 56 raw arrays) | SDF | S13 | port/stbd beam split not documented |
+| 3500-series pages 3501/3502 (u32 counts and samples, freq at 404) | SDF | S13 (MIT reader) | slots per the reference reader |
+| System 7000 pages 7000/7001 | SDF | S13 (existence) | **header decoded, data verbatim: spec says "tentatively defined"** |
 | 20-byte general header, '#' type codes, trailing length word | KMALL | S11 | little endian, 4-byte alignment |
 | #MRZ: partition, common body, ping info, tx sectors, rx info, soundings, seabed image | KMALL | S11 | blocks walked by declared sizes |
 | #MRZ partition split and rejoin (common body per part from v3) | KMALL | S11 | multibeam data logging chapter |
@@ -940,3 +1038,21 @@ Consulted 2026-08-31.
   appear only in GPL text, and real captures put fill bytes in the
   field anyway (anchor errata), so the byte is carried raw.
 - **Oculus writing**: this library reads Oculus logs only.
+- **SDF System 7000 channel data**: the spec's own wording is that
+  the structure is "tentatively defined", so those pages decode
+  header-only with the data region verbatim; a real System 7000 file
+  plus a firmer spec revision would pin it.
+- **SDFX and post-2008 header extensions**: the authoritative
+  "SDF/SDFX Data Page Definitions Specification" (Rev 4.8 and later)
+  is not public; reserved words are surfaced through `header_bytes`,
+  the only proven later assignment (the 3500-series frequency word)
+  is decoded, and unrecognized page versions (navigation and system
+  pages seen in 3500-series files per the MIT reader) are skipped
+  tolerantly and counted, never guessed.
+- **SDF marker-less TPU captures**: the spec defines .sdf as
+  marker-led pages saved by SonarPro; a raw capture without markers
+  degrades to one counted gap rather than a guessed walk.
+- **SDF System 5000 beam sides**: no public document states which of
+  the ten processed beam channels are port and which starboard; the
+  typedef names are surfaced unmapped.
+- **SDF writing**: this library reads SDF only.

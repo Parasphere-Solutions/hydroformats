@@ -9,6 +9,11 @@ Supported dialects:
 - Generic Sensor Format (swath bathymetry interchange): :func:`read_gsf`
 - Sound Metrics ARIS/DIDSON DDF (imaging sonar): :func:`read_aris`
 - EdgeTech JSF (side scan and bathymetric side scan): :func:`read_jsf`
+- Klein SDF (System 3000/3900, 5000 and 3500-series side scan
+  logging): :func:`read_klein`; the survey bundle is
+  :func:`hydroformats.klein.load_survey`, exported here as
+  :func:`load_klein` because the SVLog loader claimed the
+  ``load_survey`` name first
 - Triton XTF (sidescan interchange): :func:`read_xtf`; the survey bundle
   is :func:`hydroformats.xtf.load_survey`, exported here as
   :func:`load_sidescan` because the SVLog loader claimed the
@@ -53,6 +58,8 @@ from .hs2x import parse_hs2x
 from .hsx import parse_hsx
 from .jsf import load_survey as load_jsf
 from .jsf import read_jsf
+from .klein import load_survey as load_klein
+from .klein import read_klein
 from .kmall import load_swath as load_kmall
 from .kmall import read_kmall
 from .oculus import load_imaging as load_oculus
@@ -77,6 +84,7 @@ __all__ = [
     "load_imaging",
     "load_jsf",
     "load_oculus",
+    "load_klein",
     "load_sidescan",
     "load_s7k",
     "load_kmall",
@@ -91,6 +99,7 @@ __all__ = [
     "read_jsf",
     "read_oculus",
     "read_oculus_raw",
+    "read_klein",
     "read_s7k",
     "read_kmall",
     "read_svlog",
