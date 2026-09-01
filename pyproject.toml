@@ -1,6 +1,6 @@
 [project]
 name = "hydroformats"
-version = "0.4.0"
+version = "0.5.0"
 description = "Pure-Python parsers for hydrographic survey log formats (HYPACK® RAW, HYSWEEP® HSX, HS2X)"
 readme = "README.md"
 license = { file = "LICENSE" }

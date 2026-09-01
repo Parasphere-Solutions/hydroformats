@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Blueprint Oculus read-only dialect (the ViewPoint `.oculus` V1 log
   container and the raw SimplePingResult stream of the M370s/M750d/
