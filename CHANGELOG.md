@@ -70,7 +70,7 @@
   `load_klein` because SVLog holds the package-level `load_survey`
   name. Unknown page versions skip tolerantly; truncation and
   overrunning counts degrade to `MalformedRecord`, never exceptions.
-  Clean-room anchor S13 in docs/FORMAT-SOURCES.md (the L-3 Klein SDF
+  Clean-room anchor S14 in docs/FORMAT-SOURCES.md (the L-3 Klein SDF
   data page specification Rev 2.05 and the SonarPro UDP companion
   spec, with 3500-series specifics from OceanScan's MIT-licensed
   reference reader; GPL and copyleft parsers never opened), including

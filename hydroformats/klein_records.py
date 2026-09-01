@@ -1,7 +1,7 @@
 """Typed, immutable records for the Klein SDF dialect.
 
 Every layout is hand-built from the format owner's own data page
-specification and its UDP companion document (anchor S13 in
+specification and its UDP companion document (anchor S14 in
 docs/FORMAT-SOURCES.md), with the 3500-series page specifics anchored
 to OceanScan-MST's MIT-licensed reference reader (attribution in the
 same anchor; license verified before reading). The page framing, the
@@ -27,7 +27,7 @@ from .records import Record
 
 # --------------------------------------------------------------------------
 # header field tables (spec section 2.1 typedef; units per the UDP
-# companion document, anchor S13)
+# companion document, anchor S14)
 # --------------------------------------------------------------------------
 
 # The 44-word base header every page version carries (bytes 0-175).

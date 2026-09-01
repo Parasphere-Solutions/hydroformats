@@ -6,7 +6,7 @@ tables of the Klein SDF data page specification, document 15300018
 Rev 2.05 (builders in klein_builders.py; citations in
 hydroformats/klein.py); all values are fictional. The real-sample
 integration test at the bottom runs only when KLEIN_SAMPLE points at a
-real SDF file (see docs/FORMAT-SOURCES.md anchor S13 for a public
+real SDF file (see docs/FORMAT-SOURCES.md anchor S14 for a public
 source).
 """
 import math
@@ -505,7 +505,7 @@ _SAMPLE = os.environ.get("KLEIN_SAMPLE", "")
                     reason="KLEIN_SAMPLE not set or file missing")
 def test_real_sample_statistics():
     """Statistics from a real, publicly archived SDF file; provenance
-    in docs/FORMAT-SOURCES.md anchor S13. Pinned once a lawful sample
+    in docs/FORMAT-SOURCES.md anchor S14. Pinned once a lawful sample
     is in hand."""
     survey = load_survey(_SAMPLE)
     counters = survey.counters

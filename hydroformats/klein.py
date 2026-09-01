@@ -11,7 +11,7 @@ family's channel data as variable-length arrays, each led by its own
 sample count.
 
 Every layout here and in :mod:`hydroformats.klein_records` is
-hand-built from public documents (anchor S13 in
+hand-built from public documents (anchor S14 in
 docs/FORMAT-SOURCES.md):
 
 - "SDF Data Page Definitions Specification", L-3 Communications Klein

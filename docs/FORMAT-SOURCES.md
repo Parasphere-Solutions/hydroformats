@@ -583,7 +583,7 @@ repository):
   header's payloadSize, and rows times beams equals imageSize).
 
 Consulted 2026-08-31.
-**S13: Klein SDF data page specification.** The Klein SDF reader
+**S14: Klein SDF data page specification.** The Klein SDF reader
 (`hydroformats/klein.py`, records in `hydroformats/klein_records.py`)
 is anchored to the format owner's own published page definitions plus
 one MIT-licensed reference reader:
@@ -794,18 +794,18 @@ word), and unrecognized page versions are counted, never guessed.
   table is the only trustworthy geometry, and the library treats
   aperture as data, never a model constant.
 
-- **S13's version 3 SBP typedef contradicts its own prose.** The
+- **S14's version 3 SBP typedef contradicts its own prose.** The
   System 3000 version 3 structure declares `short sbp[]` and the
   revision history records the deliberate change ("Changed System
   3000 SBP to short from unsigned short", Rev 1.01), yet the sentence
   under the same typedef still says "Each of the data channel samples
   is a 16-bit unsigned quantity". The library follows the typedef:
   SBP samples decode signed, side scan unsigned.
-- **S13's wingAngle type differs between its two documents.** The SDF
+- **S14's wingAngle type differs between its two documents.** The SDF
   typedef declares `float wingAngle`; the UDP companion's field table
   prints U32 for the same word. The library reads the typedef's
   float.
-- **S13's UDP byte order does not apply on disk.** The UDP spec
+- **S14's UDP byte order does not apply on disk.** The UDP spec
   converts the header to network byte order (big endian) before
   broadcast; SDF files are little endian per the MIT reference reader
   and real bytes. A reader built from the UDP document's wire dumps
@@ -879,13 +879,13 @@ word), and unrecognized page versions are counted, never guessed.
 | Water column 7018/7042 | s7k | S12 | Tables 63, 82: **headers decoded, sample payloads skipped** |
 | Sound velocity 7610 (size-detected temperature and pressure) | s7k | S12 | Table 117 |
 | s7k 1005-1017 sensor family (incl. PDS 1015/1016), 7001-7022, 7030-7059, 7200, 7300, 7500-7511, 7504 | s7k | S12 (existence) | **skipped, counted by type** |
-| Page framing (0xFFFFFFFF marker, numberBytes, resync on marker) | SDF | S13 | marker excluded from numberBytes |
-| Page header: base 44 words, v3 to 256 B, v4 to 512 B | SDF | S13 | offsets computed from the packed typedef |
-| Header units and enums (radians, cm/s vs m/s, masks, waveforms) | SDF | S13 (UDP doc) | see anchor errata on byte order |
-| System 3000 channels (port/stbd LF/HF u16, SBP 4-byte count) | SDF | S13 | v3 SBP signed per errata; v4 SBP s32 |
-| System 5000 channels (chan1-10, bathy I/Q, sensors, 56 raw arrays) | SDF | S13 | port/stbd beam split not documented |
-| 3500-series pages 3501/3502 (u32 counts and samples, freq at 404) | SDF | S13 (MIT reader) | slots per the reference reader |
-| System 7000 pages 7000/7001 | SDF | S13 (existence) | **header decoded, data verbatim: spec says "tentatively defined"** |
+| Page framing (0xFFFFFFFF marker, numberBytes, resync on marker) | SDF | S14 | marker excluded from numberBytes |
+| Page header: base 44 words, v3 to 256 B, v4 to 512 B | SDF | S14 | offsets computed from the packed typedef |
+| Header units and enums (radians, cm/s vs m/s, masks, waveforms) | SDF | S14 (UDP doc) | see anchor errata on byte order |
+| System 3000 channels (port/stbd LF/HF u16, SBP 4-byte count) | SDF | S14 | v3 SBP signed per errata; v4 SBP s32 |
+| System 5000 channels (chan1-10, bathy I/Q, sensors, 56 raw arrays) | SDF | S14 | port/stbd beam split not documented |
+| 3500-series pages 3501/3502 (u32 counts and samples, freq at 404) | SDF | S14 (MIT reader) | slots per the reference reader |
+| System 7000 pages 7000/7001 | SDF | S14 (existence) | **header decoded, data verbatim: spec says "tentatively defined"** |
 | 20-byte general header, '#' type codes, trailing length word | KMALL | S11 | little endian, 4-byte alignment |
 | #MRZ: partition, common body, ping info, tx sectors, rx info, soundings, seabed image | KMALL | S11 | blocks walked by declared sizes |
 | #MRZ partition split and rejoin (common body per part from v3) | KMALL | S11 | multibeam data logging chapter |
