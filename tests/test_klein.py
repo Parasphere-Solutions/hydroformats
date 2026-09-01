@@ -6,8 +6,9 @@ tables of the Klein SDF data page specification, document 15300018
 Rev 2.05 (builders in klein_builders.py; citations in
 hydroformats/klein.py); all values are fictional. The real-sample
 integration test at the bottom runs only when KLEIN_SAMPLE points at a
-real SDF file (see docs/FORMAT-SOURCES.md anchor S14 for a public
-source).
+real SDF file; no lawful public sample was locatable when this suite
+was written (the hunt is recorded in docs/FORMAT-SOURCES.md anchor
+S14).
 """
 import math
 import os
@@ -504,11 +505,28 @@ _SAMPLE = os.environ.get("KLEIN_SAMPLE", "")
 @pytest.mark.skipif(not (_SAMPLE and os.path.exists(_SAMPLE)),
                     reason="KLEIN_SAMPLE not set or file missing")
 def test_real_sample_statistics():
-    """Statistics from a real, publicly archived SDF file; provenance
-    in docs/FORMAT-SOURCES.md anchor S14. Pinned once a lawful sample
-    is in hand."""
+    """Structural invariants for the first real SDF file to arrive.
+
+    No lawful public sample could be located as of 2026-08-31 (the
+    hunt and its venues are recorded in docs/FORMAT-SOURCES.md anchor
+    S14), so this gate asserts the invariants any well-logged SonarPro
+    file must satisfy rather than file-specific statistics: every byte
+    framed, nothing malformed, at least one decoded ping, monotonic
+    non-decreasing ping numbers, and every channel array sized by its
+    own count prefix. Pin exact numbers here the day a lawful sample
+    lands.
+    """
     survey = load_survey(_SAMPLE)
     counters = survey.counters
     assert counters.bytes_skipped == 0
     assert counters.malformed == 0
+    assert counters.pages == len(survey.pings) + len(survey.system_7000) \
+        + sum(count for _, count in counters.unknown_page_versions)
     assert len(survey.pings) > 0
+    numbers = [p.ping_number for p in survey.pings]
+    assert all(b >= a for a, b in zip(numbers, numbers[1:], strict=False))
+    for ping in survey.pings:
+        assert ping.towfish is not None
+        assert ping.header_size in (256, 512)
+        for one in ping.channels:
+            assert len(one.sample_bytes) == one.count * one.sample_width

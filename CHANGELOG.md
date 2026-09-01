@@ -76,7 +76,13 @@
   reference reader; GPL and copyleft parsers never opened), including
   three anchor errata found inside the vendor documents (the version 3
   SBP signedness contradiction, the wingAngle float/U32 conflict, and
-  the UDP network-byte-order trap).
+  the UDP network-byte-order trap). No lawful public .sdf sample could
+  be located anywhere (the hunt across Zenodo, USGS, NOAA NCEI, R2R,
+  GitHub, the Wayback index and the open data repositories is recorded
+  in the S14 anchor), so validation rests on the synthetic fixtures
+  and the env-gated `KLEIN_SAMPLE` integration test asserts structural
+  invariants, ready to pin exact statistics the day a lawful sample
+  arrives.
 - Teledyne RESON s7k read-only dialect (the native logging of the
   SeaBat 7k sonar generation and a major survey-industry interchange
   format): sync-verified Data Record Frame walker with forward

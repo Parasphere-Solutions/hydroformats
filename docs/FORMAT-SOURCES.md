@@ -658,6 +658,32 @@ public web); later-revision additions inside the 2008 reserved region
 are decoded only where the MIT reader proves them (the 3500 frequency
 word), and unrecognized page versions are counted, never guessed.
 
+**Validation gap, stated loudly: no lawful public SDF sample could be
+located as of 2026-08-31**, so the S14 layouts are pinned by synthetic
+fixtures alone and the real-sample integration test
+(`tests/test_klein.py::test_real_sample_statistics`, run with
+`KLEIN_SAMPLE=<path to a real .sdf>`) is env-gated and pending. The
+hunt covered: Zenodo (full API enumeration of Klein and side scan
+records; the only Klein SDF holdings, GeoEcoMar's PN 19200501
+archaeology series with a Klein System 3000, are CC-BY but
+access-restricted, files not downloadable), USGS (Publications
+Warehouse, ScienceBase and the CMGDS field-activity trees: Klein
+3000/3900 surveys publish processed mosaics and chirp SEG-Y, with
+sidescan converted to XTF, never raw SDF), NOAA NCEI (the geoportal
+catalog full-text across all 151 Klein and side scan records, the NOS
+product and raw-survey manifests, and accession trees: products only,
+zero .sdf), Rolling Deck to Repository (complete fileset dump: no
+towed sidescan instrument at all), GitHub code and repository search,
+the Wayback CDX index across nine candidate domains including Klein's
+own l-3klein.com and kleinmarinesystems.com (zero archived .sdf URLs;
+filter syntax verified against known files), and Dryad, Figshare,
+PANGAEA, Mendeley Data, data.gov and the Internet Archive (zero). The
+pattern is consistent: agencies archive Klein data after conversion
+(XTF, GeoTIFF), and raw SDF stays with the operator. The first
+lawfully shareable .sdf (a partner file or a future government
+release) pins the byte-order and layout anchors against real bytes
+immediately; the integration test is already in place to receive it.
+
 ## Anchor errata
 
 - **S2's RAW conversion prose is wrong.** It reads "lat=raw latitude in the
